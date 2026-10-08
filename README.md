@@ -1,0 +1,194 @@
+# SET50 Dividend Carry Model
+
+คาดการณ์เงินปันผลรายหุ้น แล้วรวมเป็นปันผลต่อสัญญา SET50 futures (outright และ
+calendar spread) ตาม membership scenario ที่ user กำหนด เพื่อใช้คำนวณ dividend
+ใน cost of carry
+
+| ไฟล์ | หน้าที่ |
+|---|---|
+| `dividend_model.py` | เตรียมข้อมูล API, หา *slot* ของแต่ละหุ้น, สร้าง event CONFIRMED/FORECAST |
+| `set50.py` | วันหมดอายุสัญญา, membership รายครึ่งปี, ปันผลต่อสัญญา |
+| `dividend_run.py` | snapshot รายวัน → Excel และ backtest |
+
+## หลักการของโมเดล
+
+- **Slot** = ช่วงเวลาในปีที่หุ้นขึ้น XD เป็นประจำ (เช่น PTT `M04` final, `M08`
+  interim) หาจากการ cluster วัน XD ย้อนหลัง 5 ปี ไม่ต้องใช้ operation period
+  หรือ cadence จึงไม่สับสนกรณี interim 6 เดือน + final 12 เดือน
+- **probability** = ปีที่จ่ายใน slot นั้น ÷ ปีที่มีโอกาสจ่าย (นับตั้งแต่ปีแรกที่
+  slot ปรากฏ ภายใน lookback) จ่ายครบทุกปี = 1.0
+- **วัน XD** = median ของ 3 ครั้งล่าสุด, window = min/max ± 7 วัน
+- **DPS** = median ของ 3 ครั้งล่าสุด (ถ้าปีเดียวกันมีหลายครั้งใน slot เดียวกัน รวมกันก่อน)
+- ไม่ forecast และส่งไป **Review** เมื่อ: เคยจ่ายครั้งเดียว (`ONE_OFF`), ไม่จ่าย
+  2 ปีติด (`STALE_SLOT`), วัน XD กระจายเกิน 120 วัน (`IRREGULAR_TIMING`),
+  ไม่มีข้อมูล (`NO_DATA`, `NO_RECENT_DIVIDEND`)
+- **Event ที่ประกาศแล้ว** (announce ≤ as_of) แทนที่ forecast ของ slot-ปีเดียวกัน
+  แม้ XD ผ่านไปแล้วก็ตาม ไม่มี forecast ซ้ำ
+- ไม่มี `announceDate` → ใช้ `boardDate` → ถ้าไม่มีอีก ถือว่าประกาศก่อน XD 7 วัน
+
+## ปันผลต่อสัญญา
+
+```
+contribution = probability × P(XD อยู่ในช่วงของสัญญา) × DPS × เป็นสมาชิก SET50 ณ วัน XD
+```
+
+- Outright เช่น `S50H27`: XD ใน (as_of, expiry]
+- Spread เช่น `S50Z26H27`: XD ใน (expiry Z26, expiry H27]
+- วันหมดอายุ = วันทำการก่อนวันทำการสุดท้ายของเดือน (**ต้องส่งวันหยุด SET ให้**
+  ไม่งั้นข้ามแค่เสาร์อาทิตย์ เช่น Z26 จะได้ 30 ธ.ค. แทน 29 ธ.ค.)
+- P(XD ในช่วง) ของ forecast ใช้การกระจายแบบสามเหลี่ยมบน XD window (mode =
+  วัน XD ที่คาด) และ condition ว่ายังไม่เกิดถึง as_of — event ที่ window คร่อม
+  expiry จะถูกแบ่งสัดส่วนให้ทั้งสองสัญญา
+- Membership ดูตามครึ่งปีของ **วัน XD** (SET50 เปลี่ยนสมาชิกมีผล ม.ค./ก.ค.)
+  ช่วงที่ไม่ได้กำหนดจะใช้รายชื่อครึ่งปีล่าสุดที่มี
+
+ผลลัพธ์เป็น DPS (บาท/หุ้น) ต่อหุ้นต่อสัญญา — การแปลงเป็นจุดดัชนี/dividend yield
+ด้วยน้ำหนักดัชนีทำใน Excel
+
+## Excel output (`dividend_<YYYYMMDD>_<scenario>.xlsx`)
+
+| Sheet | เนื้อหา |
+|---|---|
+| `Carry` | หุ้น × สัญญา: expected DPS (เฉพาะสมาชิก) ← ใช้ตัวนี้คูณน้ำหนัก |
+| `Instruments` | วันหมดอายุ และช่วง XD ของแต่ละสัญญา |
+| `Detail` | ทุก event × สัญญา พร้อม probability, p_xd_in_range, is_member |
+| `Events` | event CONFIRMED + FORECAST (14 คอลัมน์) |
+| `Membership` | scenario ที่ใช้ (1/0) + รายการเข้า/ออกที่ assume |
+| `Review` | slot/หุ้นที่ไม่ forecast พร้อมเหตุผล |
+| `Run_Info` | as_of, scenario, พารามิเตอร์ |
+
+ไฟล์ตั้งชื่อตามวันที่และ scenario จึงไม่ทับกัน — ไฟล์ของแต่ละวันคือ state ว่า
+วันนั้นคาดการณ์อะไรและ bet membership อย่างไร ไม่ต้องมี database แยก เพราะ API
+ให้ประวัติพร้อม announceDate ทำให้ย้อนสร้าง forecast ของวันในอดีตได้เสมอ (backtest)
+
+## ใช้ใน Jupyter
+
+### 1. Import
+
+```python
+import importlib
+import pandas as pd
+
+import dividend_model, set50, dividend_run
+for module in (dividend_model, set50, dividend_run):
+    importlib.reload(module)
+
+from dividend_model import ModelParams
+from set50 import (
+    membership_table, change_membership, membership_changes,
+    default_instruments, instrument_table,
+)
+from dividend_run import run_snapshot, backtest_snapshot, backtest_many
+```
+
+### 2. Membership scenario
+
+```python
+SET50_NOW = [
+    "ADVANC", "AOT", "AWC", "BANPU", "BBL", "BCP", "BDMS", "BEM", "BH", "BJC",
+    "CCET", "COM7", "CPALL", "CPF", "CPN", "CRC", "DELTA", "EGCO", "GPSC", "GULF",
+    "HMPRO", "IVL", "KBANK", "KKP", "KTB", "KTC", "LH", "MINT", "MRDIYT", "MTC",
+    "OR", "OSP", "PTT", "PTTEP", "PTTGC", "RATCH", "SCB", "SCC", "SCGP", "TCAP",
+    "TFG", "THAI", "TIDLOR", "TISCO", "TLI", "TOP", "TRUE", "TTB", "TU", "WHA",
+]
+
+# ค่าเริ่มต้น: สมาชิกครึ่งปีถัดไปเหมือนปัจจุบัน
+MEMBERSHIP = membership_table(SET50_NOW, "2026H2", through="2027H1")
+
+# bet: รอบ 2027H1 เอา THAI ออก, เอา XYZ เข้า (มีผลต่อไปทุกครึ่งปีหลังจากนั้น)
+MEMBERSHIP = change_membership(MEMBERSHIP, "2027H1", add=["XYZ"], remove=["THAI"])
+# หรือแก้ทีละช่อง: MEMBERSHIP.loc["THAI", "2027H1"] = False
+
+membership_changes(MEMBERSHIP)
+```
+
+### 3. ดึงข้อมูล
+
+ใช้ `get_dividend` / `fetch_all_dividends` เดิมได้เลย แต่ดึงตาม **ทุก symbol ใน
+scenario** (รวมหุ้นที่ bet ว่าจะเข้า) ไม่ใช่ list ที่ hardcode:
+
+```python
+dividend_raw, dividend_normalized, fetch_log, raw_by_symbol = fetch_all_dividends(
+    symbols=MEMBERSHIP.index.tolist(),
+    headers=headers,
+    get_dividend_func=get_dividend,
+)
+display(fetch_log.loc[fetch_log["status"].ne("OK")])
+```
+
+ส่ง `dividend_raw` หรือ `dividend_normalized` เข้าโมเดลได้ทั้งคู่ (ต้องมี
+`symbol`, `xDate`, `adjustedDPS`; ใช้ `announceDate`, `boardDate` ถ้ามี)
+
+### 4. Snapshot วันนี้ → Excel
+
+```python
+AS_OF = pd.Timestamp.today().normalize()
+SET_HOLIDAYS = ["2026-12-31", "2027-01-01"]  # ใส่ปฏิทินวันหยุด SET ให้ครบ
+
+INSTRUMENTS = ["S50Z26", "S50H27", "S50M27", "S50Z26H27", "S50H27M27"]
+# หรือ default_instruments(AS_OF, SET_HOLIDAYS)  -> 2 สัญญาไตรมาสถัดไป + spread
+
+snapshot = run_snapshot(
+    dividend_raw,
+    as_of=AS_OF,
+    membership=MEMBERSHIP,
+    instruments=INSTRUMENTS,
+    holidays=SET_HOLIDAYS,
+    scenario="thai_out",           # ชื่อ scenario อยู่ในชื่อไฟล์
+    output_dir="dividend_model_output",
+)
+print(snapshot["path"])
+display(snapshot["instruments"])
+display(snapshot["matrix"])        # = sheet Carry
+display(snapshot["review"])
+```
+
+เปรียบเทียบหลาย scenario: เรียก `run_snapshot` ซ้ำด้วย membership/scenario อื่น
+
+### 5. Backtest
+
+ส่ง membership ที่ "คาด" ไว้ ณ วันนั้น (และรายชื่อจริงถ้าอยากวัด error จาก
+membership ด้วย) ระบบจะใช้เฉพาะข้อมูลที่ประกาศแล้ว ณ `as_of`:
+
+```python
+BET = membership_table(SET50_2024H2, "2024H2", through="2025H1")
+ACTUAL = change_membership(BET, "2025H1", add=[...], remove=[...])
+
+result = backtest_snapshot(
+    dividend_raw,
+    as_of="2024-10-01",
+    membership=BET,
+    instruments=["S50Z24", "S50H25", "S50Z24H25"],
+    holidays=SET_HOLIDAYS,
+    actual_membership=ACTUAL,      # ไม่ใส่ = ใช้ BET (วัดเฉพาะโมเดลปันผล)
+)
+display(result["carry"])    # forecast vs actual ต่อหุ้นต่อสัญญา
+display(result["events"])   # HIT / NO_EVENT / UNEXPECTED, error วัน XD และ DPS
+
+# หลายวัน
+many = backtest_many(dividend_raw, pd.date_range("2023-01-15", "2025-06-15", freq="MS"),
+                     membership=BET_ALL_PERIODS, holidays=SET_HOLIDAYS)
+display(many["summary"])
+```
+
+ข้อควรระวัง: `adjustedDPS` ถูกปรับย้อนหลังตาม corporate action ที่เกิดทีหลัง
+backtest จึงมี look-ahead เล็กน้อยในตัวเลข DPS และต้องดึงข้อมูลหุ้นที่เคยเป็น
+สมาชิกในอดีตด้วย
+
+### พารามิเตอร์
+
+```python
+params = ModelParams(
+    lookback_years=5, slot_gap_days=45, timing_recent_n=3, dps_recent_n=3,
+    min_occurrences=2, stale_years=2, window_pad_days=7,
+    prior_alpha=0.0, prior_beta=0.0,   # ใส่ prior ถ้าต้องการ shrink probability
+)
+run_snapshot(..., params=params)
+```
+
+## Tests
+
+```bash
+pip install pytest
+python -m pytest tests
+```
