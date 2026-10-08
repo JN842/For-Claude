@@ -6,6 +6,7 @@ calendar spread) ตาม membership scenario ที่ user กำหนด �
 
 | ไฟล์ | หน้าที่ |
 |---|---|
+| `dividend_api.py` | ดึงประวัติ XD จาก API (`fetch_dividends`) |
 | `dividend_model.py` | เตรียมข้อมูล API, หา *slot* ของแต่ละหุ้น, สร้าง event CONFIRMED/FORECAST |
 | `set50.py` | วันหมดอายุสัญญา, membership รายครึ่งปี, ปันผลต่อสัญญา |
 | `dividend_run.py` | snapshot รายวัน → Excel และ backtest |
@@ -69,10 +70,11 @@ contribution = probability × P(XD อยู่ในช่วงของสั
 import importlib
 import pandas as pd
 
-import dividend_model, set50, dividend_run
-for module in (dividend_model, set50, dividend_run):
+import dividend_api, dividend_model, set50, dividend_run
+for module in (dividend_api, dividend_model, set50, dividend_run):
     importlib.reload(module)
 
+from dividend_api import fetch_dividends
 from dividend_model import ModelParams
 from set50 import (
     membership_table, change_membership, membership_changes,
@@ -104,20 +106,15 @@ membership_changes(MEMBERSHIP)
 
 ### 3. ดึงข้อมูล
 
-ใช้ `get_dividend` / `fetch_all_dividends` เดิมได้เลย แต่ดึงตาม **ทุก symbol ใน
-scenario** (รวมหุ้นที่ bet ว่าจะเข้า) ไม่ใช่ list ที่ hardcode:
+ดึงตาม **ทุก symbol ใน scenario** (รวมหุ้นที่ bet ว่าจะเข้า) ไม่ใช่ list ที่ hardcode
+ไม่ต้อง normalize เอง โมเดลจัดการให้:
 
 ```python
-dividend_raw, dividend_normalized, fetch_log, raw_by_symbol = fetch_all_dividends(
-    symbols=MEMBERSHIP.index.tolist(),
-    headers=headers,
-    get_dividend_func=get_dividend,
-)
+TOKEN = "eyJ..."   # Bearer token ของวันนี้ (ไม่ต้องใส่คำว่า Bearer)
+
+dividend_raw, fetch_log = fetch_dividends(MEMBERSHIP.index.tolist(), token=TOKEN)
 display(fetch_log.loc[fetch_log["status"].ne("OK")])
 ```
-
-ส่ง `dividend_raw` หรือ `dividend_normalized` เข้าโมเดลได้ทั้งคู่ (ต้องมี
-`symbol`, `xDate`, `adjustedDPS`; ใช้ `announceDate`, `boardDate` ถ้ามี)
 
 ### 4. Snapshot วันนี้ → Excel
 
@@ -151,8 +148,11 @@ display(snapshot["review"])
 membership ด้วย) ระบบจะใช้เฉพาะข้อมูลที่ประกาศแล้ว ณ `as_of`:
 
 ```python
+# รายชื่อ SET50 ที่ใช้อยู่ช่วง 2024H2 (ใส่รายชื่อจริงของรอบนั้น)
+SET50_2024H2 = SET50_NOW
 BET = membership_table(SET50_2024H2, "2024H2", through="2025H1")
-ACTUAL = change_membership(BET, "2025H1", add=[...], remove=[...])
+# รายชื่อจริงรอบ 2025H1 ใส่ add/remove ตามที่เปลี่ยนจริง
+ACTUAL = change_membership(BET, "2025H1", add=[], remove=[])
 
 result = backtest_snapshot(
     dividend_raw,
@@ -165,9 +165,14 @@ result = backtest_snapshot(
 display(result["carry"])    # forecast vs actual ต่อหุ้นต่อสัญญา
 display(result["events"])   # HIT / NO_EVENT / UNEXPECTED, error วัน XD และ DPS
 
-# หลายวัน
-many = backtest_many(dividend_raw, pd.date_range("2023-01-15", "2025-06-15", freq="MS"),
-                     membership=BET_ALL_PERIODS, holidays=SET_HOLIDAYS)
+# หลายวัน: membership ต้องครอบคลุมตั้งแต่ครึ่งปีของวันแรก
+BET_ALL = membership_table(SET50_2024H2, "2024H2", through="2025H2")
+many = backtest_many(
+    dividend_raw,
+    pd.date_range("2024-07-15", "2025-03-15", freq="MS"),
+    membership=BET_ALL,
+    holidays=SET_HOLIDAYS,
+)
 display(many["summary"])
 ```
 
