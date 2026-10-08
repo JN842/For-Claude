@@ -134,10 +134,115 @@ def write_excel(snapshot, path, scenario="base", holidays=()):
     return path
 
 
+def read_holidays(path, sheet="Other", column="A", first_row=2):
+    """SET holidays typed as dates in one column of a workbook.
+
+    Reads the same list the trading workbook uses for its own expiry
+    formulas, so both sides agree on last trading days.
+    """
+    from openpyxl import load_workbook
+
+    workbook = load_workbook(path, read_only=True, data_only=True)
+    try:
+        values = [
+            row[0]
+            for row in workbook[sheet].iter_rows(
+                min_row=first_row,
+                min_col=ord(column.upper()) - 64,
+                max_col=ord(column.upper()) - 64,
+                values_only=True,
+            )
+        ]
+    finally:
+        workbook.close()
+    dates = pd.to_datetime(
+        [value for value in values if value not in (None, "")],
+        errors="coerce",
+    )
+    return sorted(set(dates.dropna().normalize()))
+
+
+LINK_COLUMNS = {
+    "carry": ["symbol", "instrument", "index_period", "expected_dps", "key"],
+    "universe": ["universe"],
+    "membership": ["member_symbol", "member_period", "is_member", "member_key"],
+    "info": ["item", "value"],
+}
+
+
+def link_tables(snapshot, scenario="base"):
+    """The blocks of the fixed-layout ``Link`` sheet for the trading workbook.
+
+    carry: expected DPS per symbol, instrument and index half-year (the
+    half-year of the XD date), so the workbook can apply the basket of
+    that half-year.  Constituents only.
+    """
+    detail = snapshot["detail"]
+    carry = (
+        detail.loc[detail["is_member"]]
+        .groupby(["symbol", "instrument", "index_period"], as_index=False)
+        ["contribution"].sum()
+        .rename(columns={"contribution": "expected_dps"})
+    )
+    membership = snapshot["membership"]
+    member_long = (
+        membership.astype(int)
+        .rename_axis("member_symbol")
+        .reset_index()
+        .melt(id_vars="member_symbol", var_name="member_period",
+              value_name="is_member")
+    )
+    # Text keys let the workbook use fast SUMIFS lookups.
+    carry["key"] = (
+        carry["symbol"] + "|" + carry["instrument"] + "|" + carry["index_period"]
+    )
+    member_long["member_key"] = (
+        member_long["member_symbol"] + "|" + member_long["member_period"]
+    )
+    info = pd.DataFrame(
+        [
+            ("as_of", snapshot["as_of"]),
+            ("scenario", scenario),
+            ("model_version", MODEL_VERSION),
+            ("generated_at", pd.Timestamp.now().floor("s")),
+        ],
+        columns=LINK_COLUMNS["info"],
+    )
+    return {
+        "carry": carry[LINK_COLUMNS["carry"]],
+        "universe": pd.DataFrame({"universe": list(membership.index)}),
+        "membership": member_long[LINK_COLUMNS["membership"]],
+        "info": info,
+    }
+
+
+def write_excel_link(snapshot, path, scenario="base"):
+    """Write ``Link``: A:E carry, F universe, H:K membership, L:M info.
+
+    The trading workbook reads these fixed columns (paste or Power Query
+    into its ``Python`` sheet at A1), so the layout must not change.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tables = link_tables(snapshot, scenario)
+    with pd.ExcelWriter(path, engine="openpyxl", date_format="YYYY-MM-DD",
+                        datetime_format="YYYY-MM-DD") as writer:
+        for name, start_col in [("carry", 0), ("universe", 5),
+                                ("membership", 7), ("info", 11)]:
+            tables[name].to_excel(writer, sheet_name="Link",
+                                  startcol=start_col, index=False)
+    return path
+
+
 def run_snapshot(raw, as_of, membership, instruments=None, holidays=(),
                  params=None, output_dir="dividend_model_output",
-                 scenario="base"):
-    """Build today's snapshot and write ``dividend_<as_of>_<scenario>.xlsx``."""
+                 scenario="base", link_name="dividend_latest.xlsx"):
+    """Build today's snapshot and write two files to ``output_dir``:
+
+    ``dividend_<as_of>_<scenario>.xlsx``  the dated record of this run
+    ``link_name``  fixed-name ``Link`` sheet read by the trading workbook
+    (overwritten each run; pass ``None`` to skip)
+    """
     snapshot = forecast_snapshot(
         raw, as_of, membership, instruments, holidays, params
     )
@@ -145,6 +250,10 @@ def run_snapshot(raw, as_of, membership, instruments=None, holidays=(),
         f"dividend_{snapshot['as_of']:%Y%m%d}_{scenario}.xlsx"
     )
     snapshot["path"] = write_excel(snapshot, path, scenario, holidays)
+    if link_name:
+        snapshot["link_path"] = write_excel_link(
+            snapshot, Path(output_dir) / link_name, scenario
+        )
     return snapshot
 
 

@@ -286,3 +286,55 @@ def test_backtest_reports_membership_and_missed_dividend():
     assert carry.loc["SCC", "forecast"] > 0
     assert carry.loc["SCC", "actual"] == 0
     assert result["events"].set_index("symbol").loc["SCC", "outcome"] == "NO_EVENT"
+
+
+# --- workbook link ----------------------------------------------------------
+
+def test_default_instruments_without_spreads():
+    assert default_instruments(AS_OF, quarterly=4, spreads=False) == [
+        "S50Z26", "S50H27", "S50M27", "S50U27",
+    ]
+
+
+def test_link_splits_carry_by_xd_half_year(tmp_path):
+    from dividend_run import link_tables
+
+    raw = frame(semiannual("PTT", range(2018, 2027)))
+    table = change_membership(
+        membership_table(["PTT", "THAI"], "2026H2", "2027H1"), "2027H1",
+        remove=["THAI"],
+    )
+    snapshot = run_snapshot(raw, AS_OF, table, ["S50H27", "S50U27"],
+                            output_dir=tmp_path)
+    tables = link_tables(snapshot)
+    carry = tables["carry"].set_index("key")["expected_dps"]
+    # Final (Apr) falls in 2027H1, interim (Aug) in 2027H2.
+    assert carry.to_dict() == {
+        "PTT|S50U27|2027H1": 1.2, "PTT|S50U27|2027H2": 0.8,
+    }
+    members = tables["membership"].set_index("member_key")["is_member"]
+    assert members["THAI|2026H2"] == 1 and members["THAI|2027H1"] == 0
+    link = pd.read_excel(snapshot["link_path"], sheet_name="Link")
+    assert list(link.columns[:6]) == [
+        "symbol", "instrument", "index_period", "expected_dps", "key", "universe",
+    ]
+    assert list(link.columns[7:13]) == [
+        "member_symbol", "member_period", "is_member", "member_key", "item", "value",
+    ]
+
+
+def test_read_holidays(tmp_path):
+    from openpyxl import Workbook
+
+    from dividend_run import read_holidays
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Other"
+    sheet["A1"] = "SET holidays"
+    sheet["A2"] = pd.Timestamp("2026-12-31").to_pydatetime()
+    sheet["A3"] = "2027-01-01"
+    workbook.save(tmp_path / "tq.xlsx")
+    holidays = read_holidays(tmp_path / "tq.xlsx")
+    assert holidays == [pd.Timestamp("2026-12-31"), pd.Timestamp("2027-01-01")]
+    assert contract_expiry(2026, 12, holidays) == pd.Timestamp("2026-12-29")

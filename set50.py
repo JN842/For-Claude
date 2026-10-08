@@ -90,8 +90,12 @@ def instrument_table(instruments, as_of, holidays=()):
     return pd.DataFrame(rows)
 
 
-def default_instruments(as_of, holidays=(), quarterly=2):
-    """Next ``quarterly`` H/M/U/Z contracts plus the spread between the first two."""
+def default_instruments(as_of, holidays=(), quarterly=2, spreads=True):
+    """Next ``quarterly`` H/M/U/Z contracts, plus the first-two spread if ``spreads``.
+
+    A spread's dividends equal far-leg minus near-leg outright dividends,
+    so a sheet that has the outrights can derive every spread itself.
+    """
     as_of = pd.Timestamp(as_of).normalize()
     codes = []
     year, month = as_of.year, as_of.month
@@ -101,7 +105,7 @@ def default_instruments(as_of, holidays=(), quarterly=2):
         month += 1
         if month > 12:
             year, month = year + 1, 1
-    if len(codes) >= 2:
+    if spreads and len(codes) >= 2:
         codes.append(codes[0] + codes[1][3:])
     return codes
 
