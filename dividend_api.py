@@ -10,6 +10,9 @@ DATE_COLUMNS = ["announceDate", "xDate", "paymentDate", "recordDate", "boardDate
 
 def get_dividend(symbol, token, base_url=BASE_URL, timeout=20):
     """All XD rows for one symbol, dates converted to Bangkok calendar dates."""
+    token = str(token).strip()
+    if token.lower().startswith("bearer "):
+        token = token[7:].strip()
     response = requests.get(
         f"{base_url}/{symbol.upper()}/XD",
         params={

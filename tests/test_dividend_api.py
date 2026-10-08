@@ -34,3 +34,13 @@ def test_fetch_dividends_logs_each_symbol(monkeypatch):
     }
     # UTC 17:00 on the 4th is the 5th in Bangkok.
     assert raw.loc[raw["symbol"].eq("PTT"), "xDate"].iloc[0] == pd.Timestamp("2026-03-05")
+
+
+def test_bearer_prefix_is_accepted(monkeypatch):
+    seen = []
+    monkeypatch.setattr(
+        dividend_api.requests, "get",
+        lambda url, params, headers, timeout: seen.append(headers) or _Response("PTT"),
+    )
+    dividend_api.get_dividend("PTT", " Bearer tok ")
+    assert seen == [{"Authorization": "Bearer tok"}]
