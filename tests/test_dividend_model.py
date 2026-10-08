@@ -296,7 +296,7 @@ def test_default_instruments_without_spreads():
     ]
 
 
-def test_link_splits_carry_by_xd_half_year(tmp_path):
+def test_link_splits_carry_by_xd_quarter(tmp_path):
     from dividend_run import link_tables
 
     raw = frame(semiannual("PTT", range(2018, 2027)))
@@ -308,15 +308,15 @@ def test_link_splits_carry_by_xd_half_year(tmp_path):
                             output_dir=tmp_path)
     tables = link_tables(snapshot)
     carry = tables["carry"].set_index("key")["expected_dps"]
-    # Final (Apr) falls in 2027H1, interim (Aug) in 2027H2.
+    # Final (Apr) falls in 2027Q2, interim (Aug) in 2027Q3.
     assert carry.to_dict() == {
-        "PTT|S50U27|2027H1": 1.2, "PTT|S50U27|2027H2": 0.8,
+        "PTT|S50U27|2027Q2": 1.2, "PTT|S50U27|2027Q3": 0.8,
     }
     members = tables["membership"].set_index("member_key")["is_member"]
     assert members["THAI|2026H2"] == 1 and members["THAI|2027H1"] == 0
     link = pd.read_excel(snapshot["link_path"], sheet_name="Link")
     assert list(link.columns[:6]) == [
-        "symbol", "instrument", "index_period", "expected_dps", "key", "universe",
+        "symbol", "instrument", "basket_quarter", "expected_dps", "key", "universe",
     ]
     assert list(link.columns[7:13]) == [
         "member_symbol", "member_period", "is_member", "member_key", "item", "value",

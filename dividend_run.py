@@ -162,8 +162,16 @@ def read_holidays(path, sheet="Other", column="A", first_row=2):
     return sorted(set(dates.dropna().normalize()))
 
 
+def basket_quarter(dates):
+    """Calendar-quarter label (``"2026Q4"``) of each date."""
+    dates = pd.DatetimeIndex(pd.to_datetime(dates))
+    return pd.Series(
+        [f"{d.year}Q{d.quarter}" for d in dates], dtype="object"
+    ).to_numpy()
+
+
 LINK_COLUMNS = {
-    "carry": ["symbol", "instrument", "index_period", "expected_dps", "key"],
+    "carry": ["symbol", "instrument", "basket_quarter", "expected_dps", "key"],
     "universe": ["universe"],
     "membership": ["member_symbol", "member_period", "is_member", "member_key"],
     "info": ["item", "value"],
@@ -173,14 +181,16 @@ LINK_COLUMNS = {
 def link_tables(snapshot, scenario="base"):
     """The blocks of the fixed-layout ``Link`` sheet for the trading workbook.
 
-    carry: expected DPS per symbol, instrument and index half-year (the
-    half-year of the XD date), so the workbook can apply the basket of
-    that half-year.  Constituents only.
+    carry: expected DPS per symbol, instrument and calendar quarter of the
+    XD date, so the workbook can apply the basket in force that quarter
+    (baskets are rebalanced quarterly).  Constituents only; membership
+    itself is per index half-year.
     """
-    detail = snapshot["detail"]
+    detail = snapshot["detail"].copy()
+    detail["basket_quarter"] = basket_quarter(detail["xd_date"])
     carry = (
         detail.loc[detail["is_member"]]
-        .groupby(["symbol", "instrument", "index_period"], as_index=False)
+        .groupby(["symbol", "instrument", "basket_quarter"], as_index=False)
         ["contribution"].sum()
         .rename(columns={"contribution": "expected_dps"})
     )
@@ -194,7 +204,7 @@ def link_tables(snapshot, scenario="base"):
     )
     # Text keys let the workbook use fast SUMIFS lookups.
     carry["key"] = (
-        carry["symbol"] + "|" + carry["instrument"] + "|" + carry["index_period"]
+        carry["symbol"] + "|" + carry["instrument"] + "|" + carry["basket_quarter"]
     )
     member_long["member_key"] = (
         member_long["member_symbol"] + "|" + member_long["member_period"]

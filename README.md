@@ -200,7 +200,7 @@ run_snapshot(..., params=params)
 
 | คอลัมน์ | เนื้อหา |
 |---|---|
-| A:E | symbol, instrument, index_period (ครึ่งปีของวัน XD), expected_dps, key = `SYMBOL\|SERIES\|PERIOD` |
+| A:E | symbol, instrument, basket_quarter (ไตรมาสของวัน XD), expected_dps, key = `SYMBOL\|SERIES\|QUARTER` |
 | F | universe (ทุก symbol ใน scenario) |
 | H:K | membership: symbol, period, is_member, key = `SYMBOL\|PERIOD` |
 | L:M | as_of, scenario, model_version, generated_at |
@@ -208,12 +208,13 @@ run_snapshot(..., params=params)
 วางทั้งชีทลง `prototype_TQ.xlsx > Python!A1` (paste values หรือ Power Query)
 สูตรที่ผูกไว้สร้างด้วย `python tools/update_prototype_tq.py <in.xlsx> <out.xlsx>`:
 
-- **Basket Next**: basket ของครึ่งปีถัดไปตาม membership bet — วิธีเดียวกับ
-  Q Rebalance (ราคาปิดวันที่กำหนด × จำนวนหุ้น, cap 10%, ไม่ปัด) หุ้นที่ไม่มีใน
+- **Basket Proj**: basket ของ 4 ไตรมาสถัดไป แต่ละไตรมาสใช้สมาชิกของครึ่งปีที่
+  ไตรมาสนั้นอยู่ (membership bet จาก Python) — วิธีเดียวกับ Q Rebalance
+  (ราคาปิดวันที่กำหนด × จำนวนหุ้น, cap 10%, ไม่ปัด) หุ้นที่ไม่มีใน
   Q Rebalance ใส่จำนวนหุ้นในคอลัมน์ `Shares override`
-- **Dividend**: DPS ต่อหุ้น × series × ครึ่งปี คูณ basket ของครึ่งปีนั้น
-  (ครึ่งปีปัจจุบัน = Q Rebalance P, ครึ่งปีถัดไป = Basket Next, ถัดจากนั้นใช้
-  Basket Next ต่อ) ÷ (200 × 50) = จุดดัชนี
+- **Dividend**: DPS ต่อหุ้น × series × ไตรมาสของวัน XD คูณ basket ของไตรมาสนั้น
+  (ไตรมาสปัจจุบัน = Q Rebalance P, ไตรมาสถัดไป = Basket Proj) ÷ (200 × 50)
+  = จุดดัชนี
 - **Monitor**: Div pts, Fair (Rf) = S(1+r_f·t) − D, Fair (Borrow) = S(1+r_b·t) − D
   และตาราง calendar spread (ไกล − ใกล้) ทั้ง bid/ask/mid/fair
 
