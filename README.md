@@ -12,6 +12,7 @@ calendar spread) ตาม membership scenario ที่ user กำหนด �
 | `dividend_run.py` | snapshot รายวัน → Excel และ backtest |
 | `thaiwarrant.py` | ดึง term sheet / ราคา / IV รายวันของ SET50 DW จาก thaiwarrant.com → `data/thaiwarrant/` (ผล: `docs/dw_iv_findings.md`) |
 | `mm_pricing.py` | หา convention ราคาของ MM จากตาราง bid (`KGI_CONVENTION`) และ back out IV ที่ MM ใช้จริงจากราคาปิด |
+| `issuer_sites.py` | ตาราง bid / IV จากเว็บผู้ออก (Yuanta DW19, JPM DW41), รายชื่อ SET50 DW ทุกผู้ออก และ `sweep_iv` เทียบ IV บนฐานเดียวกัน → `data/issuers/` |
 | `dw_event_study.py` | P&L ของ long DW + hedge delta ด้วย futures รอบเหตุการณ์ แยก gamma/theta |
 | `vega_arb.py` | งานวิจัย vega arb SET50 DW vs S50 options: IV, จับคู่, sizing, H1/H3 (แผน: `docs/vega_arb_plan.md`, events: `refdata/vega_events.csv`) |
 
