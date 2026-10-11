@@ -207,3 +207,26 @@ def issuer_implied_vol(daily, terms, convention=KGI_CONVENTION, min_price=0.0):
                        vol, np.nan)
         out.append(rows.assign(iv_mm=vol))
     return pd.concat(out).sort_index()
+
+
+def build_grid(term, vol, F_levels, dates, convention=KGI_CONVENTION):
+    """Our bid table for one series: every futures level × date, rounded to tick."""
+    cells = pd.DataFrame([(F, pd.Timestamp(d)) for d in dates for F in F_levels],
+                         columns=["F", "date"]).assign(bid=0.0)
+    grid = model_grid(cells, term, vol, **convention)
+    return grid.assign(symbol=term.name, bid=grid["model_bid"])[
+        ["symbol", "F", "date", "bid", "theo"]]
+
+
+def compare_grid(ours, theirs):
+    """Match ours vs a published grid on (symbol, F, date); diff in ticks."""
+    merged = ours.merge(theirs[["symbol", "F", "date", "bid"]], on=["symbol", "F", "date"],
+                        suffixes=("_ours", "_theirs"))
+    merged["diff_ticks"] = np.round((merged["bid_theirs"] - merged["bid_ours"])
+                                    / tick_size(merged["bid_theirs"])).astype(int)
+    summary = merged.groupby("symbol").agg(
+        cells=("diff_ticks", "size"),
+        exact=("diff_ticks", lambda d: (d == 0).mean()),
+        within_1=("diff_ticks", lambda d: (d.abs() <= 1).mean()),
+        mean_diff=("diff_ticks", "mean"))
+    return merged, summary
