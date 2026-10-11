@@ -1,0 +1,35 @@
+date,end_date,name,type,region,verified,note
+2020-03-12,2020-03-13,COVID circuit breakers,shock,GLOBAL,False,SET circuit breaker หลายรอบ
+2020-03-23,2020-03-23,COVID circuit breaker,shock,GLOBAL,False,
+2022-02-24,2022-02-24,Russia invades Ukraine,shock,GLOBAL,False,
+2023-05-14,2023-05-14,Thai general election,scheduled,TH,False,รูปแบบ A
+2023-07-13,2023-07-19,Thai PM vote after election,shock,TH,False,พรรคอันดับ 1 ตั้งรัฐบาลไม่ได้
+2024-08-05,2024-08-05,Yen carry trade unwind,shock,GLOBAL,False,
+2024-08-14,2024-08-14,Constitutional Court removes PM,shock,TH,False,
+2025-03-28,2025-03-28,Myanmar earthquake / Bangkok building collapse,shock,TH,False,
+2025-04-02,2025-04-09,US reciprocal tariffs,shock,GLOBAL,False,
+2025-07-01,2025-07-01,Constitutional Court suspends PM,shock,TH,False,
+2025-07-24,2025-07-24,Thai-Cambodia border clash,shock,TH,False,
+2025-08-29,2025-08-29,Constitutional Court removes PM,shock,TH,False,
+2026-03-04,2026-03-04,SET -8.01% circuit breaker,shock,TH,False,ต้องยืนยันสาเหตุ
+2026-10-13,2026-10-16,US CPI/PPI/retail sales (Sep) + China data,scheduled,US,False,
+2026-10-28,2026-10-28,FOMC,scheduled,US,False,ประชุม 27-28 ต.ค.
+2026-10-28,2026-10-28,MPC 5/2569,scheduled,TH,False,
+2026-10-29,2026-10-29,ECB,scheduled,EU,False,
+2026-10-30,2026-10-30,BOJ,scheduled,JP,False,
+2026-11-03,2026-11-03,US midterm elections,scheduled,US,False,
+2026-11-11,2026-11-11,MSCI November index review,scheduled,GLOBAL,False,มีผล 2026-12-01
+2026-12-09,2026-12-09,FOMC (SEP),scheduled,US,False,ประชุม 8-9 ธ.ค.
+2026-12-23,2026-12-23,MPC 6/2569,scheduled,TH,False,
+2027-01-27,2027-01-27,FOMC,scheduled,US,False,tentative
+2027-02-09,2027-02-09,MSCI index review,scheduled,GLOBAL,False,
+2027-03-17,2027-03-17,FOMC,scheduled,US,False,tentative
+2027-04-28,2027-04-28,FOMC,scheduled,US,False,tentative
+2027-05-10,2027-05-10,MSCI index review,scheduled,GLOBAL,False,
+2027-06-09,2027-06-09,FOMC,scheduled,US,False,tentative
+2027-07-28,2027-07-28,FOMC,scheduled,US,False,tentative
+2027-08-12,2027-08-12,MSCI index review,scheduled,GLOBAL,False,
+2027-09-15,2027-09-15,FOMC,scheduled,US,False,tentative
+2027-10-27,2027-10-27,FOMC,scheduled,US,False,tentative
+2027-11-11,2027-11-11,MSCI index review,scheduled,GLOBAL,False,
+2027-12-08,2027-12-08,FOMC,scheduled,US,False,tentative
