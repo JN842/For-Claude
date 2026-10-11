@@ -128,7 +128,7 @@ def fetch_jpm(symbol, session=None):
     text = re.sub(r"\s+", " ", BeautifulSoup(html, "lxml").get_text(" "))
     iv = re.search(r"Implied Volatility \(%\) ([\d.]+)%", text)
     stamp = re.search(r"ข้อมูลล่าสุด ณ (\d{2}) (\S+) (\d{4})", text)
-    futures = re.search(r"\((S50[A-Z]\d{2})\)", text)
+    futures = re.search(r"\(((?:S50|ES|NQ|YM)[A-Z]\d{1,2})\)", text)
     as_of = pd.Timestamp.today().normalize()
     if stamp:
         thai = "ม.ค. ก.พ. มี.ค. เม.ย. พ.ค. มิ.ย. ก.ค. ส.ค. ก.ย. ต.ค. พ.ย. ธ.ค.".split()
@@ -146,14 +146,99 @@ def fetch_jpm(symbol, session=None):
     return {"terms": terms, "grid": grid}
 
 
-def fetch_many(fetch, symbols, delay=2.0):
+# ---------------------------------------------------------------------------
+# Bualuang DW01 (blswarrant.com)
+# ---------------------------------------------------------------------------
+
+BLS = "https://www.blswarrant.com"
+
+
+def fetch_bls(symbol, session=None, futures_side="bid"):
+    """BLS shows futures bid and offer per row; ``futures_side`` picks F
+    ("bid", "offer" or "mid")."""
+    session = session or _session()
+    html = _get(session, f"{BLS}/mydw/{symbol}").text
+    soup = BeautifulSoup(html, "lxml")
+    text = re.sub(r"\s+", " ", soup.get_text(" "))
+    iv = re.search(r"Implied Volatility : ([\d.]+)%", text)
+    stamp = re.search(r"\(as of (\d{1,2}) ([A-Z][a-z]{2}) (\d{2})\)", text)
+    as_of = (pd.Timestamp(2000 + int(stamp.group(3)), MONTHS[stamp.group(2)], int(stamp.group(1)))
+             if stamp else pd.Timestamp.today().normalize())
+    table = soup.find("table", id="tb_detail_mydw")
+    rows = [[c.get_text(strip=True) for c in tr.find_all(["td", "th"])]
+            for tr in table.find_all("tr")] if table else []
+    grid = pd.DataFrame()
+    header = next((r for r in rows if r and "Bid" in r[0] and "Offer" in r[0]), None)
+    if header:
+        futures = re.match(r"(S50[A-Z]\d{2}|[A-Z0-9]+)", header[0]).group(1)
+        labels = [re.sub(r"(\d{1,2})([A-Z][a-z]{2})(\d{2})", r"\1 \2", h) for h in header[1:]]
+        records = []
+        for r in rows[rows.index(header) + 1:]:
+            if len(r) < 3 + len(labels):
+                continue
+            bid_f, offer_f = float(r[0].replace(",", "")), float(r[2].replace(",", ""))
+            F = {"bid": bid_f, "offer": offer_f, "mid": (bid_f + offer_f) / 2}[futures_side]
+            records.append([F] + r[3:3 + len(labels)])
+        if records:
+            grid = _long(pd.DataFrame(records, columns=["F"] + labels), symbol, futures, as_of)
+    terms = {"symbol": symbol, "issuer": "BLS",
+             "published_iv": float(iv.group(1)) / 100 if iv else float("nan"), "as_of": as_of}
+    return {"terms": terms, "grid": grid}
+
+
+# ---------------------------------------------------------------------------
+# Macquarie DW28 (thaidw.com)
+# ---------------------------------------------------------------------------
+
+MACQ = "https://www.thaidw.com"
+
+
+def macq_ric(symbol):
+    """SPX28C2612A -> SPX28C612A.BK (Reuters code drops the year's tens digit)."""
+    m = re.match(r"^(.*\d\d[CP])\d(\d{3}[A-Z])$", symbol)
+    return f"{m.group(1)}{m.group(2)}.BK"
+
+
+def fetch_macquarie(symbol, session=None):
+    """Terms, published IV and today's live matrix (DW bid/ask at each
+    underlying bid/ask).  ``fx`` is backed out of the issuer's own
+    baht-adjusted underlying price."""
+    session = session or _session()
+    data = _get(session, f"{MACQ}/apimqth/LiveMatrixJSON",
+                params={"ric": macq_ric(symbol), "mode": 0},
+                headers={"Referer": f"{MACQ}/tools/livematrix"}).json()
+    ric = data.get("ric_data") or {}
+    num = lambda v: float(str(v).replace(",", "")) if v not in (None, "", "N/A") else float("nan")
+    under = num(ric.get("underlying_price"))
+    terms = {
+        "symbol": symbol, "issuer": "MACQ", "cp": "C" if ric.get("type") == "CALL" else "P",
+        "underlying": ric.get("underlying_ticker"), "underlying_ric": ric.get("underlying_ric"),
+        "strike": num(ric.get("exercise_price")), "ratio": num(ric.get("conv_ratio")),
+        "last_trade": pd.to_datetime(ric.get("last_trading_date"), format="%d %b %y"),
+        "published_iv": num(ric.get("implied_volatility")) / 100,
+        "underlying_price": under,
+        "fx": num(ric.get("underlying_price_adj")) / under if under else float("nan"),
+        "as_of": pd.to_datetime(ric.get("update_time"), format="%d %b %y"),
+    }
+    grid = pd.DataFrame(data.get("livematrix") or [])
+    if not grid.empty:
+        grid = pd.DataFrame({
+            "symbol": symbol, "futures": ric.get("underlying_ric"),
+            "F": (grid["underlying_bid"].astype(float) + grid["underlying_ask"].astype(float)) / 2,
+            "bid": grid["bid"].astype(float), "ask": grid["ask"].astype(float),
+            "date": pd.to_datetime(grid["create_for_date"]),
+        }).drop_duplicates(["F", "bid"]).reset_index(drop=True)
+    return {"terms": terms, "grid": grid}
+
+
+def fetch_many(fetch, symbols, delay=2.0, **kwargs):
     session = _session()
     terms, grids, errors = [], [], []
     for i, symbol in enumerate(symbols):
         if i:
             time.sleep(delay)
         try:
-            page = fetch(symbol, session)
+            page = fetch(symbol, session, **kwargs)
         except Exception as exc:
             errors.append({"symbol": symbol, "error": str(exc)})
             continue

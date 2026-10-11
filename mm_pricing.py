@@ -230,3 +230,31 @@ def compare_grid(ours, theirs):
         within_1=("diff_ticks", lambda d: (d.abs() <= 1).mean()),
         mean_diff=("diff_ticks", "mean"))
     return merged, summary
+
+
+def fit_scaled(cells, strike, cp, T, rounding="floor", vols=np.arange(0.05, 0.80, 0.0005)):
+    """Fit price = c · Black-76(F, K, T, vol) when the baht-per-point scale c
+    (FX ÷ conversion ratio) is not known, e.g. DWs on foreign futures.
+
+    For each vol the scale is the least-squares fit to the tick midpoints;
+    the vol with the most exactly reproduced cells wins (ties: lower error).
+    Returns vol, scale, exact share and share within one tick.
+    """
+    F = cells["F"].to_numpy(float)
+    bid = cells["bid"].to_numpy(float)
+    tick = tick_size(bid)
+    target = bid + (tick / 2 if rounding == "floor" else 0.0)
+    sign = 1.0 if cp == "C" else -1.0
+    best = None
+    for vol in vols:
+        model = price(F, strike, T, vol, 0.0, 0.0, sign)
+        scale = float(model @ target / (model @ model))
+        theo = scale * model
+        step = np.floor(theo / tick + 1e-9) if rounding == "floor" else np.round(theo / tick)
+        diff = np.round(bid / tick - step)
+        exact = float((diff == 0).mean())
+        sse = float(((theo - target) ** 2).sum())
+        key = (exact, -sse)
+        if best is None or key > best[0]:
+            best = (key, vol, scale, exact, float((np.abs(diff) <= 1).mean()))
+    return {"vol": best[1], "scale": best[2], "exact": best[3], "within_1": best[4]}

@@ -34,3 +34,22 @@ def test_sweep_iv_ranks_cheaper_vol_first():
     assert out["symbol"].tolist() == ["CHEAP", "DEAR"]
     assert (out["iv_ask"] > out["iv_bid"]).all()
     assert out.loc[0, "iv_bid"] == pytest.approx(0.18, abs=0.02)
+
+
+def test_macquarie_ric():
+    from issuer_sites import macq_ric
+    assert macq_ric("SPX28C2612A") == "SPX28C612A.BK"
+    assert macq_ric("NIKKEI28P2612D") == "NIKKEI28P612D.BK"
+
+
+def test_fit_scaled_recovers_vol_and_fx_scale():
+    from mm_pricing import fit_scaled, price, round_to_tick
+    F = np.arange(7500, 8200, 5.0)
+    T = np.full(F.shape, 0.19)
+    scale = 33.9 / 10000
+    bid = round_to_tick(scale * price(F, 8000.0, T, 0.24, 0.0, 0.0, 1.0), "floor")
+    cells = pd.DataFrame({"F": F, "bid": bid})
+    fit = fit_scaled(cells, 8000.0, "C", T, "floor", vols=np.arange(0.15, 0.35, 0.0005))
+    assert fit["vol"] == pytest.approx(0.24, abs=0.01)
+    assert fit["scale"] == pytest.approx(scale, rel=0.05)
+    assert fit["within_1"] == 1.0
