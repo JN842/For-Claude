@@ -216,7 +216,9 @@ P&L ≈ Vega_pos × [ΔIV_dw − ΔIV_opt]           # ส่วนที่ต�
 | `gap_frequency` | 4. `h3_gap_frequency` — สัดส่วนวันที่ IV_opt − IV_dw เกิน 2/5/10 vol points |
 | `load_events` | 1. `events.csv` → `refdata/vega_events.csv` |
 
-ยังไม่ได้ทำ (รอข้อมูล): term sheet DW (`dw_terms.csv`), ราคา DW/options รายวัน, H2 (remark lag), backtest H4, margin TFEX
+ข้อมูล DW: `thaiwarrant.py` ดึง term sheet, ราคา/IV รายวัน และตาราง bid ของ KGI → `data/thaiwarrant/` ผลทดสอบชุดแรกอยู่ที่ `docs/dw_iv_findings.md`
+
+ยังไม่ได้ทำ (รอข้อมูล): ราคา/IV ของ S50 options (TFEX บล็อก), H2 (remark lag), backtest H4, margin TFEX
 ค่า `MULTIPLIER = 200` ใน `vega_arb.py` ยังเป็น **[ต้องยืนยัน]**
 
 ### โครงสร้างเป้าหมาย

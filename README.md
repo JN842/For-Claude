@@ -10,6 +10,7 @@ calendar spread) ตาม membership scenario ที่ user กำหนด �
 | `dividend_model.py` | เตรียมข้อมูล API, หา *slot* ของแต่ละหุ้น, สร้าง event CONFIRMED/FORECAST |
 | `set50.py` | วันหมดอายุสัญญา, membership รายครึ่งปี, ปันผลต่อสัญญา |
 | `dividend_run.py` | snapshot รายวัน → Excel และ backtest |
+| `thaiwarrant.py` | ดึง term sheet / ราคา / IV รายวันของ SET50 DW จาก thaiwarrant.com → `data/thaiwarrant/` (ผล: `docs/dw_iv_findings.md`) |
 | `vega_arb.py` | งานวิจัย vega arb SET50 DW vs S50 options: IV, จับคู่, sizing, H1/H3 (แผน: `docs/vega_arb_plan.md`, events: `refdata/vega_events.csv`) |
 
 ## หลักการของโมเดล
@@ -222,6 +223,6 @@ run_snapshot(..., params=params)
 ## Tests
 
 ```bash
-pip install pytest
+pip install pytest requests beautifulsoup4 lxml
 python -m pytest tests
 ```

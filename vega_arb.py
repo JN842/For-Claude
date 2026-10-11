@@ -186,3 +186,33 @@ def load_events(path=EVENTS_PATH, kind=None, verified_only=False):
     if verified_only:
         events = events.loc[events["verified"]]
     return events.reset_index(drop=True)
+
+
+def iv_stickiness(daily, terms=None):
+    """Per-series summary of how much a DW's IV moves (vol points).
+
+    ``daily`` has date, symbol, underlying, iv (e.g. ``data/thaiwarrant/
+    dw_daily.csv``).  Reports the IV level, its std and mean absolute daily
+    change, and the correlation of ΔIV with the underlying's daily return.
+    Sticky issuer IV shows as small changes uncorrelated with returns.
+    """
+    daily = daily.sort_values(["symbol", "date"]).copy()
+    daily["ret"] = daily.groupby("symbol")["underlying"].pct_change()
+    daily["d_iv"] = daily.groupby("symbol")["iv"].diff()
+
+    def summarise(group):
+        moves = group.dropna(subset=["ret", "d_iv"])
+        return pd.Series({
+            "days": len(group),
+            "iv_first": group["iv"].iloc[0],
+            "iv_last": group["iv"].iloc[-1],
+            "iv_std_pts": group["iv"].std() * 100,
+            "mean_abs_d_iv_pts": moves["d_iv"].abs().mean() * 100,
+            "corr_d_iv_ret": (moves["d_iv"].corr(moves["ret"])
+                              if len(moves) > 2 and moves["d_iv"].std() > 0 else np.nan),
+        })
+
+    result = daily.groupby("symbol")[["iv", "ret", "d_iv"]].apply(summarise)
+    if terms is not None:
+        result = terms.set_index("symbol")[["issuer", "cp"]].join(result, how="right")
+    return result
