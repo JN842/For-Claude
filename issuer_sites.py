@@ -231,8 +231,59 @@ def fetch_macquarie(symbol, session=None):
     return {"terms": terms, "grid": grid}
 
 
-def fetch_many(fetch, symbols, delay=2.0, **kwargs):
+# ---------------------------------------------------------------------------
+# KTX DW18 (ktxinvestme.com)
+# ---------------------------------------------------------------------------
+
+KTX = "https://services.ktxinvestme.com/portal-service"
+
+
+def ktx_session():
+    """Session carrying the anonymous guest token the public site uses."""
     session = _session()
+    response = session.post(f"{KTX}/auth/guest", timeout=60,
+                            headers={"Origin": "https://www.ktxinvestme.com"})
+    response.raise_for_status()
+    session.headers["Authorization"] = f"Bearer {response.json()['data']['accessToken']}"
+    return session
+
+
+def fetch_ktx(symbol, session=None):
+    session = session or ktx_session()
+    info = _get(session, f"{KTX}/api/derivatives/{symbol}").json()["data"]
+    spec, ana = info.get("spec") or {}, info.get("analytics") or {}
+    terms = {
+        "symbol": symbol, "issuer": "KTX",
+        "cp": "C" if spec.get("dw_type") == "CALL" else "P",
+        "underlying": spec.get("index_asset_id") or spec.get("underlying_asset_id"),
+        "underlying_ric": spec.get("underlying_asset_id"),
+        "underlying_currency": spec.get("underlying_currency"),
+        "strike": spec.get("strike_price"),
+        # KTX quotes underlying per DW; store DWs per underlying unit like the others
+        "ratio": 1 / spec["conversion_ratio"] if spec.get("conversion_ratio") else float("nan"),
+        "last_trade": pd.to_datetime(spec.get("last_trading_date")).normalize()
+        if spec.get("last_trading_date") else pd.NaT,
+        "published_iv": (ana.get("iv") or float("nan")) / 100,
+        "underlying_price": ana.get("ul_ref"), "dw_price": ana.get("ref_dw_price"),
+        "as_of": pd.to_datetime(ana.get("calc_ts"), unit="ms").normalize()
+        if ana.get("calc_ts") else pd.Timestamp.today().normalize(),
+    }
+    grid = pd.DataFrame()
+    try:
+        pm = _get(session, f"{KTX}/api/derivatives/pricemap/{symbol}", retries=0).json()["data"]
+        prices = pm.get("underlying_prices") or []
+        rows = [(F, bid, pd.Timestamp(day).normalize())
+                for day, bids in (pm.get("dw_prices") or {}).items()
+                for F, bid in zip(prices, bids)]
+        grid = pd.DataFrame(rows, columns=["F", "bid", "date"]).assign(
+            symbol=symbol, futures=pm.get("symbol"))
+    except Exception:
+        pass
+    return {"terms": terms, "grid": grid}
+
+
+def fetch_many(fetch, symbols, delay=2.0, session=None, **kwargs):
+    session = session or _session()
     terms, grids, errors = [], [], []
     for i, symbol in enumerate(symbols):
         if i:
