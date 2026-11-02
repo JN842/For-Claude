@@ -1,0 +1,229 @@
+# Stock Exchange of Thailand - market rules registry.
+# Times are local (Asia/Bangkok).  See auction_alpha/rules/registry.py for the
+# meaning of status / effective_from / verified_as_of.
+market: SET
+exchange_name: Stock Exchange of Thailand
+timezone: Asia/Bangkok
+currency: THB
+registry_version: "2026.11.02-1"
+
+sources:
+  - id: set_open_close_calc
+    url: https://www.set.or.th/en/market/information/trading-procedure/opening-closing-price-calculation
+    title: SET - Opening / Closing Price Calculation
+    accessed: 2026-11-02
+    fetched_ok: true
+  - id: set_trading_hours
+    url: https://www.set.or.th/en/market/information/trading-procedure/trading-hours
+    title: SET - Trading Hours
+    accessed: 2026-11-02
+    fetched_ok: true
+  - id: set_order_types
+    url: https://www.set.or.th/en/market/information/trading-procedure/order-types
+    title: SET - Order Types
+    accessed: 2026-11-02
+    fetched_ok: true
+  - id: set_price_bands_ticks
+    url: https://www.set.or.th/en/market/information/trading-procedure/price-bands-and-tick-sizes
+    title: SET - Price Bands and Tick Sizes
+    accessed: 2026-11-02
+    fetched_ok: true
+  - id: set_trading_units
+    url: https://www.set.or.th/en/market/information/trading-procedure/trading-units
+    title: SET - Trading Units
+    accessed: 2026-11-02
+    fetched_ok: true
+  - id: set_trading_methods
+    url: https://www.set.or.th/en/market/information/trading-procedure/trading-methods
+    title: SET - Trading Methods
+    accessed: 2026-11-02
+    fetched_ok: true
+  - id: secondary_knowledge
+    url: "n/a"
+    title: Secondary knowledge (not read from an official page in this project)
+    accessed: null
+    fetched_ok: false
+
+rules:
+  # ------------------------------------------------------------------ sessions
+  - key: session.phases
+    status: verified_official
+    source: set_trading_hours
+    verified_as_of: 2026-11-02
+    effective_from: null
+    value:
+      - {phase: pre_open_1, start: "09:30", end: "10:00", random_end: ["09:55", "10:00"]}
+      - {phase: continuous_1, start: "10:00", end: "12:30"}
+      - {phase: intermission, start: "12:30", end: "13:30"}
+      - {phase: pre_open_2, start: "13:30", end: "14:00", random_end: ["13:55", "14:00"]}
+      - {phase: continuous_2, start: "14:00", end: "16:30"}
+      - {phase: pre_close, start: "16:30", end: "16:40", random_end: ["16:35", "16:40"]}
+      - {phase: off_hour, start: "16:40", end: "17:00"}
+    notes: >-
+      Regular securities. Continuous sessions start at the random opening time
+      T1/T2; the 'start' above is the latest possible time.  Intermission
+      times are implied by adjacent rows on the page.  No effective date is
+      published, so earlier dates are historically assumed.
+
+  - key: auction.close.random_window
+    status: verified_official
+    source: set_open_close_calc
+    verified_as_of: 2026-11-02
+    effective_from: null
+    value: {start: "16:35", end: "16:40"}
+    notes: '"randomly select a closing time between 16:35 - 16:40 hours". Introduction date of the random close not verified.'
+
+  - key: auction.close.order_entry
+    status: verified_official
+    source: set_order_types
+    verified_as_of: 2026-11-02
+    effective_from: null
+    value:
+      phase_start: "16:30"
+      accepts: [ATC, LIMIT]
+      cancel_allowed_until: random_close
+      min_resting_ms_before_cancel: 250
+    notes: >-
+      ATC (market, fill-and-kill) is explicitly allowed in pre-close. Limit
+      orders participate ('all valid orders in the system') but the page does
+      not explicitly list limit entry in pre-close.  No pre-close specific
+      cancellation restriction is published; the general 250 ms minimum
+      resting time applies.  cancel_allowed_until is therefore an inference.
+
+  - key: auction.close.price_rule
+    status: verified_official
+    source: set_open_close_calc
+    verified_as_of: 2026-11-02
+    effective_from: null
+    value: [max_executable_volume, min_imbalance, market_pressure, nearest_last_price]
+    notes: Tie-break fallback (3.3) is 'closest to Last Sale, IPO price or lowest price'.
+
+  - key: auction.close.atc_price_outside_limits_ticks
+    status: verified_official
+    source: set_open_close_calc
+    verified_as_of: 2026-11-02
+    effective_from: null
+    value: 1
+    notes: Open/close determined with ATO/ATC can fall outside ceiling/floor by at most +/-1 tick.
+
+  - key: auction.close.no_match_fallback
+    status: secondary_unverified
+    source: secondary_knowledge
+    value: last_trade_price
+    notes: If no closing auction match occurs the official close is assumed to be the last traded price. Not stated on the pages read.
+
+  - key: auction.close.eligibility
+    status: verified_official
+    source: set_trading_hours
+    verified_as_of: 2026-11-02
+    effective_from: null
+    value: all_board_lot
+    notes: Pre-close is a board-lot auction for all regular securities; odd lots are not listed for pre-close.
+
+  - key: auction.open.random_window
+    status: verified_official
+    source: set_trading_hours
+    verified_as_of: 2026-11-02
+    effective_from: null
+    value: {start: "09:55", end: "10:00"}
+
+  - key: tac.available
+    status: verified_official
+    source: set_trading_hours
+    verified_as_of: 2026-11-02
+    value: false
+    notes: SET has no Trade-at-Close phase. Off-hour session (to 17:00) is for trade reports only.
+
+  # ------------------------------------------------------------- price limits
+  - key: price_limits.daily_pct
+    status: verified_official
+    source: set_price_bands_ticks
+    verified_as_of: 2026-11-02
+    effective_from: null
+    value: 30.0
+    notes: Shares - not exceeding 30% of preceding trading day's close (min 0.01 THB). First trading day 3x IPO price.
+
+  - key: price_band.dynamic_pct
+    status: verified_official
+    source: set_price_bands_ticks
+    verified_as_of: 2026-11-02
+    effective_from: null
+    value: {pct: 10.0, applies_in: continuous, min_price: 1.0, action: "partial match then 2-minute pre-open"}
+    notes: Effective date of the dynamic price band not published on the page.
+
+  - key: tick_size.table
+    status: verified_official
+    source: set_price_bands_ticks
+    verified_as_of: 2026-11-02
+    effective_from: 2009-03-30
+    value: [[0, 0.01], [2, 0.02], [5, 0.05], [10, 0.10], [25, 0.25], [100, 0.50], [200, 1.00], [400, 2.00]]
+    notes: '"effective since March 30, 2009". [lower_bound, tick]. ETFs/unit trusts use 0.01.'
+
+  - key: board_lot.default
+    status: verified_official
+    source: set_trading_units
+    verified_as_of: 2026-11-02
+    effective_from: null
+    value: 100
+    notes: 50 units for securities priced >= 500 THB for 6 consecutive months.
+
+  # ---------------------------------------------------------------------- fees
+  - key: fees.exchange
+    status: secondary_unverified
+    source: secondary_knowledge
+    value:
+      trading_fee_bps: 0.5
+      clearing_fee_bps: 0.1
+      regulatory_fee_bps: 0.1
+      stamp_duty_bps: 0.0
+      tax_on_fees_pct: 7.0
+    notes: >-
+      SET trading fee 0.005%, TCH clearing 0.001%, SEC fee 0.001%, VAT 7% on
+      commission and fees.  From secondary knowledge; fee holidays/reductions
+      in some years are NOT modelled.  Verify against current SET fee schedule.
+
+  - key: fees.commission_bps
+    status: assumption
+    source: null
+    value: 8.0
+    notes: Negotiated institutional commission - modelling assumption, configurable per experiment.
+
+  # ------------------------------------------------------------- short selling
+  - key: short_selling.regime
+    status: secondary_unverified
+    source: secondary_knowledge
+    value:
+      covered_only: true
+      eligible_list: exchange_published
+      price_rule: uptick_or_zero_plus_tick
+      allowed_in_closing_auction: unknown
+    notes: >-
+      Short sales only in SET-designated eligible securities with borrowing
+      arranged.  Price-rule details changed over time (tightened in 2024 per
+      secondary sources) - exact history not verified.  The simulator treats
+      shortability as data (borrow table) AND requires this regime.
+
+  - key: futures.index_hedge
+    status: secondary_unverified
+    source: secondary_knowledge
+    value: {contract: SET50 Index Futures (TFEX), multiplier: 200, day_close: "16:55", cost_bps: 1.0}
+    notes: TFEX SET50 futures continue trading after the cash closing auction. Contract specs not verified here.
+
+  - key: calendar.holidays
+    status: unknown
+    source: null
+    notes: Official SET holiday calendars for 2018-2026 were not loaded. Real-data runs infer the trading calendar from the price files.
+
+  - key: calendar.halfday
+    status: secondary_unverified
+    source: secondary_knowledge
+    value: none
+    notes: SET is not known to have regular half-day sessions.
+
+  - key: auction.close.exists
+    status: verified_official
+    source: set_open_close_calc
+    verified_as_of: 2026-11-02
+    effective_from: null
+    value: true
+    notes: Closing price by auction (pre-close session). Start date of the closing auction not verified.
