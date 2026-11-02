@@ -1,0 +1,11 @@
+# Versions used to produce the committed reports (Python 3.13.18).
+numpy==2.5.3
+pandas==3.0.5
+pyarrow==26.0.0
+duckdb==2.0.0
+scipy==1.18.1
+statsmodels==0.15.0
+plotly==7.1.0
+pydantic==2.13.5
+PyYAML==6.0.3
+pytest==9.2.0

@@ -1,0 +1,54 @@
+# Closing-auction research experiment configuration.
+#
+# dataset: a dataset name in the store (data_root).  Names starting with
+# "synthetic" are generated on first use and are SYNTHETIC - their results
+# are engineering demonstrations, never empirical findings.
+experiment: smoke_test
+dataset: synthetic_tiny_planted
+synthetic_scale: tiny          # full | small | tiny
+data_root: data/store
+results_root: results
+markets: [SET, SGX, HKEX]
+
+# Capital per market in local currency (roughly USD 1m each).  Returns are
+# P&L / fixed capital (no compounding), excess of the cash rate.
+capital: {SET: 35000000, SGX: 1300000, HKEX: 8000000}
+decision_latency_s: 2.0
+funding_spread_bps: 100
+
+# Chronological research periods.  The holdout stays locked until a frozen
+# selection.json exists and --unlock-holdout is passed.  2026 is year-to-date.
+periods:
+  discovery: [2018-01-01, 2021-12-31]
+  validation: [2022-01-01, 2023-12-31]
+  oos: [2024-01-01, 2025-12-31]
+  holdout: [2026-01-01, 2026-12-31]
+
+scenarios: [optimistic, base, conservative, stress]
+scenarios_file: config/scenarios.yaml
+
+selection:
+  period: discovery
+  scenario: base
+  metric: net_sharpe
+  min_trades: 20
+
+robustness:
+  bootstrap_n: 100
+  placebo_n: 3
+  seed: 7
+  cost_multipliers: [0.0, 0.5, 1.0, 1.5, 2.0, 3.0]
+  fill_ratios: [0.25, 0.5, 0.75, 1.0]
+  participation_caps: [0.025, 0.05, 0.1, 0.2]
+  latencies_s: [0.0, 2.0, 30.0, 120.0, 300.0]
+  capital_multiples: [0.1, 0.5, 1.0, 4.0, 16.0]
+
+strategies:
+  - {id: S01, grid: true}
+  - {id: S02, grid: true}
+  - {id: S03, grid: true}
+  - {id: S04, grid: true}
+  - {id: S05, grid: true}
+  - {id: S06, grid: true}
+  - {id: S07, grid: true, markets: [SGX]}
+  - {id: S08, grid: true}

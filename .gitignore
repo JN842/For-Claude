@@ -2,3 +2,8 @@ __pycache__/
 .pytest_cache/
 dividend_model_output/
 *.ipynb_checkpoints
+# auction_alpha generated artefacts (reproducible via the CLI)
+/data/store/
+/results/
+*.duckdb
+*.whl

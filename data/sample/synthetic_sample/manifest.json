@@ -1,0 +1,132 @@
+{
+  "dataset": "synthetic_sample",
+  "is_synthetic": true,
+  "created_utc": "2026-11-02T06:36:16+00:00",
+  "tables": {
+    "security_master": {
+      "rows": 24,
+      "sha256": "3cd68c0c0040e59cbaa9b9a4cb4378ff75f086f33bf1de8ef7a0948f8b6b49c9"
+    },
+    "daily_bars": {
+      "rows": 2815,
+      "sha256": "c3fe10c9062786ed09054f7f93941c675f73c52712f500dcd217288164e349af"
+    },
+    "auction_indicative": {
+      "rows": 10387,
+      "sha256": "73ca3c3beebfdecff25e650888526f0b3baeb0c10d871b29b74e93fbc084afe3"
+    },
+    "corporate_actions": {
+      "rows": 16,
+      "sha256": "9b32035a43aeff36e4d4496a641e534a1af44e4e4367c77fc0cee17c0257a81a"
+    },
+    "borrow": {
+      "rows": 2817,
+      "sha256": "250ed51c1f3923616295c1e9fe54533cf62c0898f266e7986fd7131d78a6825e"
+    },
+    "index_membership": {
+      "rows": 12,
+      "sha256": "bc1ddf19304d59ed02939a6ddc5a6ea7602a47194a5320e7e1978b8c65d5bab1"
+    },
+    "index_events": {
+      "rows": 0,
+      "sha256": "7bb2470765ff764fb7373087e909d263e2042c64a2f84d38e6e5cf6684d6c569"
+    },
+    "index_levels": {
+      "rows": 379,
+      "sha256": "22f3b78bf0654fd3d7fe4dc0c981c64949c8d0f3ac8ecb3137254b9a0ba9be47"
+    },
+    "futures_daily": {
+      "rows": 379,
+      "sha256": "61ea578b94d5b329ed34e9438007ca35bcc6024a27800991f8060bec07122823"
+    },
+    "intraday_trades": {
+      "rows": 738,
+      "sha256": "39f080f950f7918c4c8c30ba0eca09e592297aa16ac9c4e01f50ab59a11b4036"
+    },
+    "intraday_quotes": {
+      "rows": 720,
+      "sha256": "0b39b2b188006835766538d80398e161fca3b0da907a30a0d2e578e506b165ba"
+    }
+  },
+  "provenance": {
+    "label": "SYNTHETIC - NOT REAL MARKET DATA",
+    "config": {
+      "start": "2024-01-02",
+      "end": "2024-06-28",
+      "seed": 42,
+      "markets": {
+        "SET": {
+          "n_stocks": 8,
+          "price_median": 15.0,
+          "price_lo": 1.0,
+          "price_hi": 400.0,
+          "adv_median": 50000000.0,
+          "pressure_bps": 35.0,
+          "close_auction_share": 0.08,
+          "lots": [
+            100
+          ],
+          "shortable_top_frac": 0.4
+        },
+        "SGX": {
+          "n_stocks": 8,
+          "price_median": 1.5,
+          "price_lo": 0.1,
+          "price_hi": 40.0,
+          "adv_median": 5000000.0,
+          "pressure_bps": 30.0,
+          "close_auction_share": 0.12,
+          "lots": [
+            100
+          ],
+          "shortable_top_frac": 0.5
+        },
+        "HKEX": {
+          "n_stocks": 8,
+          "price_median": 12.0,
+          "price_lo": 0.3,
+          "price_hi": 500.0,
+          "adv_median": 60000000.0,
+          "pressure_bps": 25.0,
+          "close_auction_share": 0.1,
+          "lots": [
+            100,
+            200,
+            400,
+            500,
+            1000,
+            2000
+          ],
+          "shortable_top_frac": 0.6
+        }
+      },
+      "world": {
+        "name": "planted",
+        "overnight_reversal": 0.45,
+        "nextday_reversal": 0.25,
+        "decay": 0.5,
+        "permanent_frac": 0.15,
+        "common_pressure_bps": 8.0,
+        "rebalance_pressure_bps": 150.0,
+        "rebalance_reversal_days": 5,
+        "futures_price_in_frac": 0.5
+      },
+      "n_indicative_stocks": 2,
+      "indicative_interval_s": 30,
+      "index_size": 6,
+      "missing_row_frac": 0.001,
+      "missing_lcp_frac": 0.002
+    },
+    "planted_truth": {
+      "world": "planted",
+      "frac_gap_reverting_by_next_open": 0.3825,
+      "frac_gap_reverting_next_open_to_next_close": 0.2125,
+      "frac_gap_reverting_by_next_close": 0.595,
+      "rebalance_pressure_bps": 150.0,
+      "futures_price_in_frac": 0.5,
+      "preclose_momentum_effect": 0.0
+    },
+    "purpose": "small committed sample for inspection"
+  },
+  "data_version": "dfd33e29cf9a"
+}

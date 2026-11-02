@@ -1,0 +1,260 @@
+# Hong Kong Exchanges and Clearing (securities market) - market rules registry.
+# Times are local (Asia/Hong_Kong).
+market: HKEX
+exchange_name: Hong Kong Exchanges and Clearing - Securities Market
+timezone: Asia/Hong_Kong
+currency: HKD
+registry_version: "2026.11.02-1"
+
+sources:
+  - id: hkex_cas_faq
+    url: https://www.hkex.com.hk/Global/Exchange/FAQ/Securities-Market/Trading/CAS?sc_lang=en
+    title: HKEX - Closing Auction Session FAQ
+    accessed: 2026-11-02
+    fetched_ok: true
+    notes: Verbatim page text read. No last-updated date on the page.
+  - id: hkex_trading_hours
+    url: https://www.hkex.com.hk/Services/Trading-hours-and-Severe-Weather-Arrangements/Trading-Hours/Securities-Market?sc_lang=en
+    title: HKEX - Trading Hours (Securities Market)
+    accessed: 2026-11-02
+    fetched_ok: true
+    notes: Securities table labelled 'Updated 16 Sep 2017'.
+  - id: hkex_vcm_faq
+    url: https://www.hkex.com.hk/Global/Exchange/FAQ/Securities-Market/Trading/VCM?sc_lang=en
+    title: HKEX - Volatility Control Mechanism FAQ
+    accessed: 2026-11-02
+    fetched_ok: true
+    notes: Page loaded but content was obtained through a summary, not verbatim.
+  - id: hkex_fees
+    url: https://www.hkex.com.hk/Services/Rules-and-Forms-and-Fees/Fees/Securities-(Hong-Kong)/Trading/Transaction?sc_lang=en
+    title: HKEX - Securities Transaction Fees
+    accessed: 2026-11-02
+    fetched_ok: true
+    notes: Page loaded but content was obtained through a summary, not verbatim.
+  - id: hkex_severe_weather
+    url: https://www.hkex.com.hk/Services/Trading-hours-and-Severe-Weather-Arrangements/Severe-Weather-Arrangements?sc_lang=en
+    title: HKEX - Severe Weather Arrangements
+    accessed: 2026-11-02
+    fetched_ok: true
+    notes: Summary only.
+  - id: secondary_knowledge
+    url: "n/a"
+    title: Secondary knowledge (not read from an official page in this project)
+    accessed: null
+    fetched_ok: false
+
+rules:
+  - key: session.phases
+    status: verified_official
+    source: hkex_trading_hours
+    verified_as_of: 2026-11-02
+    effective_from: null
+    value:
+      - {phase: pre_open, start: "09:00", end: "09:30"}
+      - {phase: continuous_1, start: "09:30", end: "12:00"}
+      - {phase: lunch, start: "12:00", end: "13:00"}
+      - {phase: continuous_2, start: "13:00", end: "16:00"}
+      - {phase: cas_reference_price_fixing, start: "16:00", end: "16:01"}
+      - {phase: cas_order_input, start: "16:01", end: "16:06"}
+      - {phase: cas_no_cancellation, start: "16:06", end: "16:08"}
+      - {phase: cas_random_closing, start: "16:08", end: "16:10", random_end: ["16:08", "16:10"]}
+    notes: Page table 'Updated 16 Sep 2017'. Earlier history not verified.
+
+  - key: session.halfday_phases
+    status: verified_official
+    source: hkex_cas_faq
+    verified_as_of: 2026-11-02
+    effective_from: null
+    value:
+      - {phase: pre_open, start: "09:00", end: "09:30"}
+      - {phase: continuous_1, start: "09:30", end: "12:00"}
+      - {phase: cas_reference_price_fixing, start: "12:00", end: "12:01"}
+      - {phase: cas_order_input, start: "12:01", end: "12:06"}
+      - {phase: cas_no_cancellation, start: "12:06", end: "12:08"}
+      - {phase: cas_random_closing, start: "12:08", end: "12:10", random_end: ["12:08", "12:10"]}
+    notes: Eves of Christmas, New Year and Lunar New Year. No afternoon session.
+
+  - key: auction.close.exists
+    status: secondary_unverified
+    source: secondary_knowledge
+    effective_from: 2016-07-25
+    value: true
+    notes: CAS (re)introduced 25 July 2016 per secondary knowledge; the CAS FAQ gives no start date.
+  - key: auction.close.exists
+    status: secondary_unverified
+    source: secondary_knowledge
+    effective_to: 2016-07-24
+    value: false
+    notes: Before CAS the close was the median of five nominal prices in the last minute (secondary knowledge).
+
+  - key: auction.close.random_window
+    status: verified_official
+    source: hkex_cas_faq
+    verified_as_of: 2026-11-02
+    effective_from: null
+    value: {start: "16:08", end: "16:10"}
+    notes: '"the market closes randomly within two minutes". Whether the 2016 CAS already had this structure is not verified.'
+
+  - key: auction.close.order_entry
+    status: verified_official
+    source: hkex_cas_faq
+    verified_as_of: 2026-11-02
+    effective_from: null
+    value:
+      phase_start: "16:01"
+      accepts: [AT_AUCTION, AT_AUCTION_LIMIT]
+      cancel_allowed_until: "16:06"
+      stage1_band_pct: 5.0
+      stage2_band: within_lowest_ask_highest_bid_at_1606
+    notes: Only at-auction and at-auction limit orders from 16:01. No cancellation 16:06 to close. Short sells must be at-auction limit priced >= reference price.
+
+  - key: auction.close.reference_price
+    status: verified_official
+    source: hkex_cas_faq
+    verified_as_of: 2026-11-02
+    effective_from: null
+    value: median_of_5_nominal_prices_last_minute_15s
+    notes: Five snapshots at 15-second intervals from 15:59:00.
+
+  - key: auction.close.price_rule
+    status: secondary_unverified
+    source: secondary_knowledge
+    value: [max_executable_volume, min_imbalance, nearest_reference_price]
+    notes: The FAQ states matching at the final IEP and priority 'by order type, price and then time' but does NOT describe the IEP tie-break criteria. Tie-breaks here are secondary knowledge.
+
+  - key: auction.close.no_match_fallback
+    status: verified_official
+    source: hkex_cas_faq
+    verified_as_of: 2026-11-02
+    effective_from: null
+    value: reference_price
+    notes: If no final IEP forms the Reference Price becomes the closing price.
+
+  - key: auction.close.eligibility
+    status: verified_official
+    source: hkex_cas_faq
+    verified_as_of: 2026-11-02
+    effective_from: null
+    value: equities_funds_li_products
+    notes: >-
+      All equities (incl. DRs, investment companies, preference shares,
+      stapled securities), funds (ETFs, REITs) and L&I products.  Structured
+      products (DWs, CBBCs) excluded.  The 2016 CAS universe was narrower per
+      secondary knowledge - per-security eligibility must come from data.
+
+  - key: auction.close.non_cas_close
+    status: verified_official
+    source: hkex_cas_faq
+    verified_as_of: 2026-11-02
+    effective_from: null
+    value: reference_price
+    notes: For non-CAS securities the Reference Price becomes the closing price.
+
+  - key: auction.close.vcm_applies
+    status: secondary_unverified
+    source: hkex_vcm_faq
+    value: false
+    notes: VCM applies to board-lot orders in continuous trading only, not POS or CAS (from page summary).
+
+  - key: auction.open.random_window
+    status: secondary_unverified
+    source: secondary_knowledge
+    value: {start: "09:20", end: "09:22"}
+    notes: Pre-opening session random matching window - not read from the official page.
+
+  - key: tac.available
+    status: verified_official
+    source: hkex_cas_faq
+    verified_as_of: 2026-11-02
+    value: false
+    notes: No Trade-at-Close phase is described for HKEX.
+
+  - key: price_limits.daily_pct
+    status: verified_official
+    source: hkex_cas_faq
+    verified_as_of: 2026-11-02
+    value: null
+    notes: HKEX has no daily ceiling/floor for equities; CAS has a +/-5% band around the reference price instead.
+
+  - key: tick_size.table
+    status: secondary_unverified
+    source: secondary_knowledge
+    value: [[0.01, 0.001], [0.25, 0.005], [0.5, 0.01], [10, 0.02], [20, 0.05], [100, 0.10], [200, 0.20], [500, 0.50], [1000, 1.00], [2000, 2.00], [5000, 5.00]]
+    notes: >-
+      Long-standing HKEX spread table (secondary knowledge).  HKEX announced
+      tick-size reductions for some price bands around 2025 that are NOT
+      captured here - verify before use.
+
+  - key: board_lot.default
+    status: secondary_unverified
+    source: secondary_knowledge
+    value: null
+    notes: Board lots are set per security by the issuer (commonly 100-2000). Must come from the security master.
+
+  - key: fees.exchange
+    status: secondary_unverified
+    source: hkex_fees
+    effective_from: 2023-11-17
+    value: {trading_fee_bps: 0.565, sfc_levy_bps: 0.27, afrc_levy_bps: 0.015, stamp_duty_bps: 10.0, tax_on_fees_pct: 0.0, per_trade_tariff: 0.0}
+    notes: >-
+      Trading fee 0.00565% from 1 Jan 2023 (tariff removed); SFC levy 0.0027%
+      since 1 Nov 2014; AFRC levy 0.00015% from 1 Jan 2022 (fees page, read
+      via summary).  Stamp duty 0.1% per side; its effective date (17 Nov
+      2023) is secondary knowledge.
+  - key: fees.exchange
+    status: secondary_unverified
+    source: hkex_fees
+    effective_from: 2023-01-01
+    effective_to: 2023-11-16
+    value: {trading_fee_bps: 0.565, sfc_levy_bps: 0.27, afrc_levy_bps: 0.015, stamp_duty_bps: 13.0, tax_on_fees_pct: 0.0, per_trade_tariff: 0.0}
+    notes: Stamp duty 0.13% from 1 Aug 2021 to 16 Nov 2023 (secondary knowledge).
+  - key: fees.exchange
+    status: secondary_unverified
+    source: hkex_fees
+    effective_from: 2022-01-01
+    effective_to: 2022-12-31
+    value: {trading_fee_bps: 0.5, sfc_levy_bps: 0.27, afrc_levy_bps: 0.015, stamp_duty_bps: 13.0, tax_on_fees_pct: 0.0, per_trade_tariff: 0.5}
+  - key: fees.exchange
+    status: secondary_unverified
+    source: secondary_knowledge
+    effective_from: 2021-08-01
+    effective_to: 2021-12-31
+    value: {trading_fee_bps: 0.5, sfc_levy_bps: 0.27, afrc_levy_bps: 0.0, stamp_duty_bps: 13.0, tax_on_fees_pct: 0.0, per_trade_tariff: 0.5}
+  - key: fees.exchange
+    status: secondary_unverified
+    source: secondary_knowledge
+    effective_to: 2021-07-31
+    value: {trading_fee_bps: 0.5, sfc_levy_bps: 0.27, afrc_levy_bps: 0.0, stamp_duty_bps: 10.0, tax_on_fees_pct: 0.0, per_trade_tariff: 0.5}
+
+  - key: fees.commission_bps
+    status: assumption
+    source: null
+    value: 5.0
+    notes: Negotiated institutional commission - modelling assumption.
+
+  - key: short_selling.regime
+    status: secondary_unverified
+    source: hkex_cas_faq
+    value:
+      covered_only: true
+      eligible_list: designated_securities
+      price_rule: tick_rule_not_below_best_ask
+      allowed_in_closing_auction: at_auction_limit_ge_reference_price
+    notes: Short selling only in designated securities; CAS short sells must be at-auction limit orders priced >= reference price (CAS FAQ).
+
+  - key: futures.index_hedge
+    status: secondary_unverified
+    source: secondary_knowledge
+    value: {contract: Hang Seng Index Futures, multiplier: 50, day_close: "16:30", cost_bps: 0.8}
+    notes: HSI futures day session closes after the CAS; after-hours session exists. Contract specs not verified here.
+
+  - key: calendar.holidays
+    status: unknown
+    source: null
+    notes: Official HKEX holiday calendars not loaded. Severe-weather trading (from Sep 2024, summary only) means typhoon days may still be trading days.
+
+  - key: calendar.halfday
+    status: verified_official
+    source: hkex_trading_hours
+    verified_as_of: 2026-11-02
+    value: eves_of_christmas_new_year_lunar_new_year

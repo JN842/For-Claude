@@ -1,0 +1,116 @@
+{
+ "run_id": "20261102T065011Z_dd44d84e8b",
+ "created_utc": "2026-11-02T06:50:19+00:00",
+ "dataset": "synthetic_planted",
+ "data_version": "bae44caf3973",
+ "is_synthetic": true,
+ "provenance": {
+  "generator": "auction_alpha.data.synthetic",
+  "config": {
+   "start": "2018-01-02",
+   "end": "2026-10-30",
+   "seed": 20260101,
+   "markets": {
+    "SET": {
+     "n_stocks": 60,
+     "price_median": 15.0,
+     "price_lo": 1.0,
+     "price_hi": 400.0,
+     "adv_median": 50000000.0,
+     "pressure_bps": 35.0,
+     "close_auction_share": 0.08,
+     "lots": [
+      100
+     ],
+     "shortable_top_frac": 0.4
+    },
+    "SGX": {
+     "n_stocks": 45,
+     "price_median": 1.5,
+     "price_lo": 0.1,
+     "price_hi": 40.0,
+     "adv_median": 5000000.0,
+     "pressure_bps": 30.0,
+     "close_auction_share": 0.12,
+     "lots": [
+      100
+     ],
+     "shortable_top_frac": 0.5
+    },
+    "HKEX": {
+     "n_stocks": 60,
+     "price_median": 12.0,
+     "price_lo": 0.3,
+     "price_hi": 500.0,
+     "adv_median": 60000000.0,
+     "pressure_bps": 25.0,
+     "close_auction_share": 0.1,
+     "lots": [
+      100,
+      200,
+      400,
+      500,
+      1000,
+      2000
+     ],
+     "shortable_top_frac": 0.6
+    }
+   },
+   "world": {
+    "name": "planted",
+    "overnight_reversal": 0.45,
+    "nextday_reversal": 0.25,
+    "decay": 0.5,
+    "permanent_frac": 0.15,
+    "common_pressure_bps": 8.0,
+    "rebalance_pressure_bps": 150.0,
+    "rebalance_reversal_days": 5,
+    "futures_price_in_frac": 0.5
+   },
+   "n_indicative_stocks": 20,
+   "indicative_interval_s": 30,
+   "index_size": 30,
+   "missing_row_frac": 0.001,
+   "missing_lcp_frac": 0.002
+  },
+  "planted_truth": {
+   "world": "planted",
+   "frac_gap_reverting_by_next_open": 0.3825,
+   "frac_gap_reverting_next_open_to_next_close": 0.2125,
+   "frac_gap_reverting_by_next_close": 0.595,
+   "rebalance_pressure_bps": 150.0,
+   "futures_price_in_frac": 0.5,
+   "preclose_momentum_effect": 0.0
+  },
+  "label": "SYNTHETIC - NOT REAL MARKET DATA",
+  "scale": "full"
+ },
+ "registry_version": "b0eb2557b35f",
+ "code_version": "73e5c66",
+ "config_hash": "dd44d84e8b",
+ "config_file": "config/experiments.yaml",
+ "holdout_unlocked": false,
+ "periods": {
+  "discovery": [
+   "2018-01-01",
+   "2021-12-31"
+  ],
+  "validation": [
+   "2022-01-01",
+   "2023-12-31"
+  ],
+  "oos": [
+   "2024-01-01",
+   "2025-12-31"
+  ],
+  "holdout": [
+   "2026-01-01",
+   "2026-12-31"
+  ]
+ },
+ "capital": {
+  "SET": 35000000,
+  "SGX": 1300000,
+  "HKEX": 8000000
+ }
+}

@@ -1,0 +1,20 @@
+# Execution scenarios.  Overrides of the defaults in
+# auction_alpha/execution/scenarios.py; every field is listed in that file.
+# Historical order-level data is unavailable, so these are assumptions, not
+# measurements.  The spread of results across scenarios is the uncertainty.
+optimistic:
+  auction_participation: 0.20
+  fill_ratio: 1.0
+base:
+  auction_participation: 0.10
+  fill_ratio: 0.9
+conservative:
+  auction_participation: 0.05
+  fill_ratio: 0.75
+  short_in_auction_unknown: reject
+stress:
+  auction_participation: 0.025
+  fill_ratio: 0.5
+  impact_coef: 2.5
+  extra_slippage_bps: 5.0
+  short_in_auction_unknown: reject

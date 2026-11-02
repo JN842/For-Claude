@@ -1,0 +1,193 @@
+# Singapore Exchange (SGX-ST securities market) - market rules registry.
+# Times are local (Asia/Singapore).
+#
+# IMPORTANT: every attempt to read official SGX pages in this project failed
+# (www.sgx.com returned an 'unsupported browser' shell; rulebook.sgx.com URLs
+# returned 404).  Every SGX rule below is therefore secondary_unverified or
+# an assumption.  Confirm against the SGX-ST Trading Rules before relying on
+# any SGX result.
+market: SGX
+exchange_name: Singapore Exchange Securities Trading
+timezone: Asia/Singapore
+currency: SGD
+registry_version: "2026.11.02-1"
+
+sources:
+  - id: sgx_trading
+    url: https://www.sgx.com/securities/trading
+    title: SGX - Securities Trading
+    accessed: 2026-11-02
+    fetched_ok: false
+    notes: Returned an 'unsupported browser' interstitial only.
+  - id: sgx_rulebook
+    url: https://rulebook.sgx.com/rulebook/securities-trading-rules
+    title: SGX-ST Trading Rules
+    accessed: 2026-11-02
+    fetched_ok: false
+    notes: HTTP 404.
+  - id: secondary_knowledge
+    url: "n/a"
+    title: Secondary knowledge (not read from an official page in this project)
+    accessed: null
+    fetched_ok: false
+
+rules:
+  - key: session.phases
+    status: secondary_unverified
+    source: secondary_knowledge
+    value:
+      - {phase: pre_open, start: "08:30", end: "08:58"}
+      - {phase: pre_open_non_cancel, start: "08:58", end: "09:00", random_end: ["08:59", "09:00"]}
+      - {phase: continuous, start: "09:00", end: "17:00"}
+      - {phase: pre_close, start: "17:00", end: "17:04"}
+      - {phase: pre_close_non_cancel, start: "17:04", end: "17:06", random_end: ["17:05", "17:06"]}
+      - {phase: trade_at_close, start: "17:06", end: "17:16"}
+    notes: No lunch break (removed 2011 per secondary knowledge). Not verified.
+
+  - key: session.halfday_phases
+    status: secondary_unverified
+    source: secondary_knowledge
+    value:
+      - {phase: pre_open, start: "08:30", end: "08:58"}
+      - {phase: pre_open_non_cancel, start: "08:58", end: "09:00", random_end: ["08:59", "09:00"]}
+      - {phase: continuous, start: "09:00", end: "12:00"}
+      - {phase: pre_close, start: "12:00", end: "12:04"}
+      - {phase: pre_close_non_cancel, start: "12:04", end: "12:06", random_end: ["12:05", "12:06"]}
+      - {phase: trade_at_close, start: "12:06", end: "12:16"}
+    notes: Eves of Christmas, New Year and Lunar New Year (secondary knowledge).
+
+  - key: auction.close.random_window
+    status: secondary_unverified
+    source: secondary_knowledge
+    value: {start: "17:05", end: "17:06"}
+
+  - key: auction.close.order_entry
+    status: secondary_unverified
+    source: secondary_knowledge
+    value:
+      phase_start: "17:00"
+      accepts: [MARKET, LIMIT]
+      cancel_allowed_until: "17:04"
+    notes: Non-cancel phase from 17:04 - orders may be entered but not amended or withdrawn.
+
+  - key: auction.close.price_rule
+    status: secondary_unverified
+    source: secondary_knowledge
+    value: [max_executable_volume, min_imbalance, market_pressure, nearest_reference_price]
+
+  - key: auction.close.no_match_fallback
+    status: secondary_unverified
+    source: secondary_knowledge
+    value: last_trade_price
+
+  - key: auction.close.eligibility
+    status: secondary_unverified
+    source: secondary_knowledge
+    value: all_board_lot
+
+  - key: auction.open.random_window
+    status: secondary_unverified
+    source: secondary_knowledge
+    value: {start: "08:59", end: "09:00"}
+
+  - key: tac.available
+    status: secondary_unverified
+    source: secondary_knowledge
+    effective_from: null
+    value: true
+    notes: >-
+      Trade-at-Close phase after the closing routine where orders trade only at
+      the closing price.  Introduction date not verified (believed ~2017).
+      Before the effective date is known, every TAC result is historically
+      assumed.
+
+  - key: tac.rules
+    status: secondary_unverified
+    source: secondary_knowledge
+    value:
+      price: closing_price_only
+      order_types: [LIMIT_AT_CLOSE_PRICE]
+      requires_closing_price: true
+      matching: price_time_priority_at_close
+    notes: TAC only runs for securities with a closing price; liquidity is whatever residual interest exists.
+
+  - key: price_limits.daily_pct
+    status: secondary_unverified
+    source: secondary_knowledge
+    value: null
+    notes: No fixed daily ceiling/floor; SGX uses dynamic price limits / circuit breakers in continuous trading (details unverified).
+
+  - key: price_band.dynamic_pct
+    status: unknown
+    source: null
+    notes: SGX dynamic price limit parameters not verified.
+
+  - key: tick_size.table
+    status: secondary_unverified
+    source: secondary_knowledge
+    value: [[0, 0.001], [0.2, 0.005], [1.0, 0.01]]
+
+  - key: board_lot.default
+    status: secondary_unverified
+    source: secondary_knowledge
+    effective_from: 2015-01-19
+    value: 100
+  - key: board_lot.default
+    status: secondary_unverified
+    source: secondary_knowledge
+    effective_to: 2015-01-18
+    value: 1000
+
+  - key: fees.exchange
+    status: secondary_unverified
+    source: secondary_knowledge
+    effective_from: 2024-01-01
+    value: {clearing_fee_bps: 3.25, trading_fee_bps: 0.75, stamp_duty_bps: 0.0, tax_on_fees_pct: 9.0}
+    notes: Clearing fee 0.0325% (capped), SGX access fee 0.0075%, GST 9% from 2024.
+  - key: fees.exchange
+    status: secondary_unverified
+    source: secondary_knowledge
+    effective_from: 2023-01-01
+    effective_to: 2023-12-31
+    value: {clearing_fee_bps: 3.25, trading_fee_bps: 0.75, stamp_duty_bps: 0.0, tax_on_fees_pct: 8.0}
+  - key: fees.exchange
+    status: secondary_unverified
+    source: secondary_knowledge
+    effective_to: 2022-12-31
+    value: {clearing_fee_bps: 3.25, trading_fee_bps: 0.75, stamp_duty_bps: 0.0, tax_on_fees_pct: 7.0}
+
+  - key: fees.commission_bps
+    status: assumption
+    source: null
+    value: 8.0
+    notes: Negotiated institutional commission - modelling assumption.
+
+  - key: short_selling.regime
+    status: secondary_unverified
+    source: secondary_knowledge
+    value:
+      covered_only: true
+      eligible_list: borrow_availability
+      price_rule: none
+      allowed_in_closing_auction: unknown
+    notes: Naked short selling prohibited; short sales must be marked and borrow arranged (secondary knowledge).
+
+  - key: futures.index_hedge
+    status: secondary_unverified
+    source: secondary_knowledge
+    value: {contract: FTSE Straits Times Index Futures, multiplier: 10, day_close: "17:35", cost_bps: 1.5}
+    notes: STI futures are comparatively illiquid; hedge cost assumption is conservative. Specs not verified.
+
+  - key: calendar.holidays
+    status: unknown
+    source: null
+
+  - key: calendar.halfday
+    status: secondary_unverified
+    source: secondary_knowledge
+    value: eves_of_christmas_new_year_lunar_new_year
+
+  - key: auction.close.exists
+    status: secondary_unverified
+    source: secondary_knowledge
+    value: true
