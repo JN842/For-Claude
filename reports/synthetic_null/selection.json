@@ -1,0 +1,96 @@
+{
+ "frozen_utc": "2026-11-02T06:54:42+00:00",
+ "rule": "max discovery net Sharpe (base scenario)",
+ "config_hash": "948dec5e9e",
+ "data_version": "18dc3cde5ba1",
+ "selected": {
+  "S01_HKEX": {
+   "threshold_bps": 200,
+   "hold_sessions": 4
+  },
+  "S02_HKEX": {
+   "threshold_bps": 200,
+   "hold_sessions": 4
+  },
+  "S03_HKEX": {
+   "z_threshold": 2.5,
+   "exit_session": "close_auction"
+  },
+  "S04_HKEX": {
+   "threshold_bps": 100,
+   "mode": "provide"
+  },
+  "S05_HKEX": {
+   "mode": "pre_event",
+   "hedge": true
+  },
+  "S06_HKEX": {
+   "neutral": "beta",
+   "quantile": 0.2
+  },
+  "S08_HKEX": {
+   "threshold_bps": 5,
+   "exit": "close"
+  },
+  "S01_SET": {
+   "threshold_bps": 200,
+   "hold_sessions": 4
+  },
+  "S02_SET": {
+   "threshold_bps": 200,
+   "hold_sessions": 4
+  },
+  "S03_SET": {
+   "z_threshold": 2.5,
+   "exit_session": "close_auction"
+  },
+  "S04_SET": {
+   "threshold_bps": 100,
+   "mode": "follow"
+  },
+  "S05_SET": {
+   "mode": "pre_event",
+   "hedge": true
+  },
+  "S06_SET": {
+   "neutral": "dollar",
+   "quantile": 0.1
+  },
+  "S08_SET": {
+   "threshold_bps": 10,
+   "exit": "close"
+  },
+  "S01_SGX": {
+   "threshold_bps": 200,
+   "hold_sessions": 4
+  },
+  "S02_SGX": {
+   "threshold_bps": 200,
+   "hold_sessions": 4
+  },
+  "S03_SGX": {
+   "z_threshold": 2.5,
+   "exit_session": "close_auction"
+  },
+  "S04_SGX": {
+   "threshold_bps": 100,
+   "mode": "provide"
+  },
+  "S05_SGX": {
+   "mode": "pre_event",
+   "hedge": true
+  },
+  "S06_SGX": {
+   "neutral": "dollar",
+   "quantile": 0.1
+  },
+  "S07_SGX": {
+   "threshold_bps": 200,
+   "exit_session": "open_auction"
+  },
+  "S08_SGX": {
+   "threshold_bps": 20,
+   "exit": "open"
+  }
+ }
+}
