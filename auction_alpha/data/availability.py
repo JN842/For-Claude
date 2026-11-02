@@ -54,9 +54,9 @@ def _present(df: pd.DataFrame | None, market: str, column: str | None) -> bool:
     return column in df.columns and df[column].notna().any()
 
 
-def availability_matrix(store: DataStore) -> pd.DataFrame:
+def availability_matrix(store: DataStore, datasets: list[str] | None = None) -> pd.DataFrame:
     rows = []
-    for ds in store.datasets():
+    for ds in (datasets if datasets is not None else store.datasets()):
         man = store.manifest(ds)
         syn = man["is_synthetic"]
         tables = {t: store.read(ds, t) for t in man["tables"]}

@@ -60,30 +60,38 @@ class S08AuctionFuturesBasis(Strategy):
         x = self._signals(ctx)
         if x.empty:
             return pd.DataFrame(columns=["trade_id", "signal_ts", "submit_ts", "signal_date"])
-        x = x[(x["G"].abs() >= p["threshold_bps"] / 1e4) & x["price_post_auction"].notna() & x["next_date"].notna()]
+        # NB: no filter on next-day data - selecting on the existence of future rows would be look-ahead.
+        x = x[(x["G"].abs() >= p["threshold_bps"] / 1e4) & x["price_post_auction"].notna()]
         lat = pd.Timedelta(seconds=ctx.decision_latency_s)
+        cal = ctx.md.dates
+        k = cal.searchsorted(x["date"].to_numpy(), side="right")
+        exit_date = [cal[i] if i < len(cal) else pd.NaT for i in k]
         return pd.DataFrame({
             "trade_id": [f"{self.label()}|{ctx.market}|{d.date()}" for d in x["date"]],
             "strategy": self.label(), "market": ctx.market, "symbol": f"{ctx.market}_FUT",
             "signal_date": x["date"], "signal_ts": x["post_auction_ts"], "submit_ts": x["post_auction_ts"] + lat,
             "side": (-np.sign(x["G"])).astype(int), "price_in": x["price_post_auction"],
-            "price_out": np.where(p["exit"] == "open", x["next_open"], x["next_close"]),
-            "exit_date": x["next_date"], "multiplier": x["multiplier"], "signal": x["G"],
+            "exit_date": exit_date, "multiplier": x["multiplier"], "signal": x["G"],
         }).reset_index(drop=True)
 
     def simulate(self, intents: pd.DataFrame, md, scenario, adapter, capital: float) -> SimResult:
         p = self.params
         fills, rejects, trades = [], [], []
+        col = "open" if p["exit"] == "open" else "close"
+        fut = md.fut
         for it in intents.itertuples(index=False):
+            px_out = np.nan
+            if fut is not None and pd.notna(it.exit_date) and pd.Timestamp(it.exit_date) in fut.index:
+                px_out = float(fut.loc[pd.Timestamp(it.exit_date), col])
             spec = adapter.futures_spec(pd.Timestamp(it.signal_date).date())
             cost_bps = float(spec.get("cost_bps", 1.0)) * scenario.futures_cost_mult + scenario.extra_slippage_bps
             n = min(math.floor(capital * p["pos_frac"] / (it.price_in * it.multiplier)), p["max_contracts"])
-            if n <= 0 or not np.isfinite(it.price_out):
+            if n <= 0 or not np.isfinite(px_out):
                 rejects.append(dict(trade_id=it.trade_id, strategy=it.strategy, market=it.market, symbol=it.symbol,
                                     date=it.signal_date, leg="entry", reason="futures_size_or_price_unavailable",
                                     requested_qty=0.0, filled_qty=0.0, scenario=scenario.name))
                 continue
-            for leg, d, px, q in (("entry", it.signal_date, it.price_in, it.side * n), ("exit", it.exit_date, it.price_out, -it.side * n)):
+            for leg, d, px, q in (("entry", it.signal_date, it.price_in, it.side * n), ("exit", it.exit_date, px_out, -it.side * n)):
                 fills.append(dict(trade_id=it.trade_id, leg=leg, instrument="stock", market=it.market, symbol=it.symbol,
                                   date=pd.Timestamp(d), ts=pd.NaT, side_qty=float(q), price=float(px), base_price=float(px),
                                   fees=abs(q) * px * it.multiplier * cost_bps / 1e4, slip_cost=0.0, session="futures",

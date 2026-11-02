@@ -6,3 +6,4 @@ dividend_model_output/
 /data/store/
 /results/
 *.duckdb
+*.whl

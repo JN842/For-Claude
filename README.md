@@ -1,3 +1,7 @@
+> **New in this repository: [Closing Auction Alpha Research - SET / SGX / HKEX](docs/AUCTION_ALPHA.md)**
+> (`auction_alpha/` package, `python -m auction_alpha --help`). Research and simulation only; all committed
+> results use clearly labelled synthetic data. The SET50 dividend model below is unchanged.
+
 # SET50 Dividend Carry Model
 
 คาดการณ์เงินปันผลรายหุ้น แล้วรวมเป็นปันผลต่อสัญญา SET50 futures (outright และ

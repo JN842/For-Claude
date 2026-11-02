@@ -107,6 +107,12 @@ class ExchangeAdapter:
 
     # ------------------------------------------------------------- sessions
     def phases(self, date: dt.date, halfday: bool = False) -> list[Phase]:
+        ck = ("phases", date, halfday)
+        if ck not in self._cache:
+            self._cache[ck] = self._phases(date, halfday)
+        return self._cache[ck]
+
+    def _phases(self, date: dt.date, halfday: bool = False) -> list[Phase]:
         key = "session.halfday_phases" if halfday else "session.phases"
         spec = self._get(key, date)
         if spec is None:
@@ -136,12 +142,18 @@ class ExchangeAdapter:
 
     def open_auction_cutoff(self, date: dt.date) -> pd.Timestamp:
         """Latest time an order for the opening auction can be safely entered."""
-        win = self._get("auction.open.random_window", date)
-        return _hm(date, win["start"], self.tz)
+        ck = ("open_cut", date)
+        if ck not in self._cache:
+            win = self._get("auction.open.random_window", date)
+            self._cache[ck] = _hm(date, win["start"], self.tz)
+        return self._cache[ck]
 
     def open_time(self, date: dt.date) -> pd.Timestamp:
-        win = self._get("auction.open.random_window", date)
-        return _hm(date, win["end"], self.tz)
+        ck = ("open_time", date)
+        if ck not in self._cache:
+            win = self._get("auction.open.random_window", date)
+            self._cache[ck] = _hm(date, win["end"], self.tz)
+        return self._cache[ck]
 
     # --------------------------------------------------------- price grid
     def tick_size(self, price: float, date) -> float:

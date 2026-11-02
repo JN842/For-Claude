@@ -1,0 +1,79 @@
+test,strategy,market,passed,n_before,detail
+label_guard,*,*,True,0,
+survivorship_delisted_present,*,SET,True,0,0/0 delisted securities present before delisting
+corporate_action_pit,*,SET,True,0,0 returns used an unannounced corporate action
+truncation_invariance,S01,SET,True,311,
+perturbation_invariance,S01,SET,True,311,
+auction_deadline,S01,SET,True,0,0 auction fills submitted inside/after the random window
+truncation_invariance,S02,SET,True,311,
+perturbation_invariance,S02,SET,True,311,
+auction_deadline,S02,SET,True,0,0 auction fills submitted inside/after the random window
+truncation_invariance,S03,SET,True,467,
+perturbation_invariance,S03,SET,True,467,
+auction_deadline,S03,SET,True,584,0 auction fills submitted inside/after the random window
+truncation_invariance,S04,SET,True,516,
+perturbation_invariance,S04,SET,True,516,
+auction_deadline,S04,SET,True,704,0 auction fills submitted inside/after the random window
+truncation_invariance,S05,SET,True,0,
+perturbation_invariance,S05,SET,True,0,
+auction_deadline,S05,SET,True,0,n/a
+index_pit,S05,SET,True,0,no intents
+truncation_invariance,S06[min_names=5],SET,True,1515,
+perturbation_invariance,S06[min_names=5],SET,True,1515,
+auction_deadline,S06[min_names=5],SET,True,0,0 auction fills submitted inside/after the random window
+truncation_invariance,S08,SET,True,392,
+perturbation_invariance,S08,SET,True,392,
+auction_deadline,S08,SET,True,0,n/a
+label_guard,*,*,True,0,
+survivorship_delisted_present,*,SGX,True,1,1/1 delisted securities present before delisting
+corporate_action_pit,*,SGX,True,0,0 returns used an unannounced corporate action
+truncation_invariance,S01,SGX,True,241,
+perturbation_invariance,S01,SGX,True,241,
+auction_deadline,S01,SGX,True,0,0 auction fills submitted inside/after the random window
+truncation_invariance,S02,SGX,True,241,
+perturbation_invariance,S02,SGX,True,241,
+auction_deadline,S02,SGX,True,0,0 auction fills submitted inside/after the random window
+truncation_invariance,S03,SGX,True,447,
+perturbation_invariance,S03,SGX,True,447,
+auction_deadline,S03,SGX,True,589,0 auction fills submitted inside/after the random window
+truncation_invariance,S04,SGX,True,420,
+perturbation_invariance,S04,SGX,True,420,
+auction_deadline,S04,SGX,True,609,0 auction fills submitted inside/after the random window
+truncation_invariance,S05,SGX,True,3,
+perturbation_invariance,S05,SGX,True,3,
+auction_deadline,S05,SGX,True,0,0 auction fills submitted inside/after the random window
+index_pit,S05,SGX,True,3,0 intents without a previously received announcement
+truncation_invariance,S06[min_names=5],SGX,True,1557,
+perturbation_invariance,S06[min_names=5],SGX,True,1557,
+auction_deadline,S06[min_names=5],SGX,True,0,0 auction fills submitted inside/after the random window
+truncation_invariance,S07,SGX,True,241,
+perturbation_invariance,S07,SGX,True,241,
+auction_deadline,S07,SGX,True,0,0 auction fills submitted inside/after the random window
+truncation_invariance,S08,SGX,True,389,
+perturbation_invariance,S08,SGX,True,389,
+auction_deadline,S08,SGX,True,0,n/a
+label_guard,*,*,True,0,
+survivorship_delisted_present,*,HKEX,True,1,1/1 delisted securities present before delisting
+corporate_action_pit,*,HKEX,True,0,0 returns used an unannounced corporate action
+truncation_invariance,S01,HKEX,True,57,
+perturbation_invariance,S01,HKEX,True,57,
+auction_deadline,S01,HKEX,True,0,0 auction fills submitted inside/after the random window
+truncation_invariance,S02,HKEX,True,57,
+perturbation_invariance,S02,HKEX,True,57,
+auction_deadline,S02,HKEX,True,0,0 auction fills submitted inside/after the random window
+truncation_invariance,S03,HKEX,True,454,
+perturbation_invariance,S03,HKEX,True,454,
+auction_deadline,S03,HKEX,True,396,0 auction fills submitted inside/after the random window
+truncation_invariance,S04,HKEX,True,95,
+perturbation_invariance,S04,HKEX,True,95,
+auction_deadline,S04,HKEX,True,125,0 auction fills submitted inside/after the random window
+truncation_invariance,S05,HKEX,True,0,
+perturbation_invariance,S05,HKEX,True,0,
+auction_deadline,S05,HKEX,True,0,n/a
+index_pit,S05,HKEX,True,0,no intents
+truncation_invariance,S06[min_names=5],HKEX,True,554,
+perturbation_invariance,S06[min_names=5],HKEX,True,554,
+auction_deadline,S06[min_names=5],HKEX,True,0,0 auction fills submitted inside/after the random window
+truncation_invariance,S08,HKEX,True,346,
+perturbation_invariance,S08,HKEX,True,346,
+auction_deadline,S08,HKEX,True,0,n/a

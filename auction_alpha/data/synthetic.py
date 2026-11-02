@@ -159,8 +159,9 @@ class _MarketSim:
         late = rng.random(N) < 0.12
         list_idx[late] = rng.integers(20, int(T * 0.7), late.sum())
         delist_idx = np.full(N, T - 1)
-        dl = (rng.random(N) < 0.08) & (list_idx < T * 0.6)
-        delist_idx[dl] = [rng.integers(li + 200, T - 20) for li in list_idx[dl]]
+        gap = min(200, T // 3)
+        dl = (rng.random(N) < 0.08) & (list_idx < T * 0.6) & (list_idx + gap < T - 20)
+        delist_idx[dl] = [rng.integers(li + gap, T - 20) for li in list_idx[dl]]
         self.list_idx, self.delist_idx, self.delisted = list_idx, delist_idx, dl
         self.cas_eligible = (rng.random(N) < 0.85) if self.m == "HKEX" else np.ones(N, bool)
         self.alive = np.zeros((T, N), bool)
@@ -340,13 +341,19 @@ class _MarketSim:
         if limits_pct:  # SET ceiling/floor relative to previous close (split-adjusted)
             prev = np.vstack([close[:1], close[:-1]]) * np.vstack([sf[:1], sf[:-1]]) / sf
             lo_lim, hi_lim = prev * (1 - limits_pct / 100), prev * (1 + limits_pct / 100)
-            open_, lcp, close = (np.clip(x, lo_lim, hi_lim) for x in (open_, lcp, close))
+            hi_g = _tick_of(hi_lim, table)
+            lo_g = _tick_of(lo_lim, table)
+            hi_lim = np.floor(hi_lim / hi_g + 1e-9) * hi_g
+            lo_lim = np.ceil(lo_lim / lo_g - 1e-9) * lo_g
+            open_, lcp, close = (np.round(np.clip(x, lo_lim, hi_lim), 6) for x in (open_, lcp, close))
         # no-auction days: close is last trade (SET/SGX) or reference price (HKEX non-CAS)
         close = np.where(self.no_auction, lcp, close)
         noise = np.abs(rng.normal(0, 0.3, (T, N))) * self.idio
         high = np.maximum.reduce([open_, lcp, close]) * np.exp(noise)
         low = np.minimum.reduce([open_, lcp, close]) * np.exp(-np.abs(rng.normal(0, 0.3, (T, N))) * self.idio)
         high, low = _round_ticks(high, table), _round_ticks(low, table)
+        high = np.fmax(high, np.fmax(np.fmax(open_, lcp), close))
+        low = np.fmin(low, np.fmin(np.fmin(open_, lcp), close))
         # volumes
         price_ref = close
         adv_sh = self.adv_turn[None, :] / np.where(price_ref > 0, price_ref, np.nan)
@@ -413,12 +420,12 @@ class _MarketSim:
             "volume": np.where(sp, 0.0, np.round(f(o["volume"]))),
             "open_auction_volume": np.where(sp, 0.0, np.round(f(o["oav"]))),
             "last_continuous_price": nan_if(o["lcp"]),
-            "last_continuous_ts": pd.to_datetime(np.where(sp, np.datetime64("NaT"), f(lcp_ts).astype("datetime64[ns]")), utc=True),
+            "last_continuous_ts": pd.to_datetime(np.where(sp, np.datetime64("NaT", "ns"), f(lcp_ts).astype("datetime64[ns]")), utc=True),
             "preclose_bid": nan_if(o["bid"]), "preclose_ask": nan_if(o["ask"]),
             "close_auction_price": auc_px,
             "close_auction_volume": np.where(np.isnan(auc_px), np.where(sp, np.nan, 0.0), np.round(f(o["cav"]))),
-            "close_auction_ts": pd.to_datetime(np.where(np.isnan(auc_px), np.datetime64("NaT"), f(auc_ts).astype("datetime64[ns]")), utc=True),
-            "close_auction_receipt_ts": pd.to_datetime(np.where(np.isnan(auc_px), np.datetime64("NaT"), f(rcpt).astype("datetime64[ns]")), utc=True),
+            "close_auction_ts": pd.to_datetime(np.where(np.isnan(auc_px), np.datetime64("NaT", "ns"), f(auc_ts).astype("datetime64[ns]")), utc=True),
+            "close_auction_receipt_ts": pd.to_datetime(np.where(np.isnan(auc_px), np.datetime64("NaT", "ns"), f(rcpt).astype("datetime64[ns]")), utc=True),
             "close_method": np.where(sp, "none", f(method)),
             "tac_volume": np.where(sp, np.nan, np.round(f(o["tac"]))) if self.m == "SGX" else np.nan,
             "suspended": sp,
@@ -646,7 +653,19 @@ def generate(cfg: SyntheticConfig | None = None) -> dict[str, pd.DataFrame]:
         tr, qu = sim.intraday_sample()
         out["intraday_trades"].append(tr)
         out["intraday_quotes"].append(qu)
-    return {k: pd.concat(v, ignore_index=True) for k, v in out.items()}
+    from .schemas import ALL_SCHEMAS
+    res = {}
+    for k, v in out.items():
+        df = pd.concat([x for x in v if len(x)] or v[:1], ignore_index=True)
+        for c in ALL_SCHEMAS[k].columns:
+            if c.name not in df:
+                continue
+            if c.dtype == "ts":
+                df[c.name] = pd.to_datetime(df[c.name], utc=True)
+            elif c.dtype == "date":
+                df[c.name] = pd.to_datetime(df[c.name])
+        res[k] = df
+    return res
 
 
 def planted_truth(cfg: SyntheticConfig) -> dict:

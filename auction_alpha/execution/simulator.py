@@ -47,21 +47,22 @@ class MarketData:
 
     def __post_init__(self):
         b = self.bars[self.bars["market"] == self.market].copy()
-        b["date"] = pd.to_datetime(b["date"])
+        b["date"] = pd.to_datetime(b["date"]).astype("datetime64[ns]")
         b = b.sort_values(["symbol", "date"]).reset_index(drop=True)
         self.bars = b
         self.idx = {k: i for i, k in enumerate(zip(b["symbol"].to_numpy(), b["date"].to_numpy()))}
         self.sym_dates: dict[str, tuple[np.ndarray, np.ndarray]] = {}
         for sym, g in b.groupby("symbol", sort=False):
-            self.sym_dates[sym] = (g["date"].to_numpy(), g.index.to_numpy())
-        self.cols = {c: b[c].to_numpy() for c in b.columns}
+            self.sym_dates[sym] = (g["date"].to_numpy().astype("datetime64[ns]"), g.index.to_numpy())
+        self.cols = {c: (b[c].astype(object).to_numpy() if b[c].dtype.kind not in "fiubmM" else b[c].to_numpy())
+                     for c in b.columns}
         # previous raw close (for price limits), past information only
         self.cols["prev_close"] = b.groupby("symbol")["close"].transform(lambda s: s.ffill().shift(1)).to_numpy()
         self.last_close = b.groupby("symbol")["close"].transform(lambda s: s.ffill()).to_numpy()
         self.dates = pd.DatetimeIndex(sorted(b["date"].unique()))
         if self.borrow is not None and not self.borrow.empty:
             br = self.borrow[self.borrow["market"] == self.market].copy()
-            br["date"] = pd.to_datetime(br["date"])
+            br["date"] = pd.to_datetime(br["date"]).astype("datetime64[ns]")
             self.borrow_idx = {k: r for k, r in zip(zip(br["symbol"].to_numpy(), br["date"].to_numpy()),
                                                     br[["shortable", "borrow_fee_bps", "available_qty", "receipt_ts"]].itertuples(index=False))}
         else:
@@ -206,7 +207,11 @@ class ExecutionSimulator:
         bad = intents["submit_ts"] < intents["signal_ts"]
         if bad.any():
             raise LeakageError(f"{int(bad.sum())} intents submitted before their signal was available")
-        for it in intents.itertuples(index=False):
+        it_df = intents.copy()
+        for col in it_df.columns:
+            if it_df[col].dtype.kind not in "fiubM":
+                it_df[col] = it_df[col].astype(object)
+        for it in it_df.itertuples(index=False):
             rec = self._one(it, fills, rejects)
             trades.append(rec)
         f = pd.DataFrame(fills)

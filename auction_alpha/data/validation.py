@@ -161,6 +161,10 @@ def validate_dataset(name: str, tables: dict[str, pd.DataFrame]) -> QualityRepor
     for tname, df in tables.items():
         if tname in ALL_SCHEMAS:
             validate_schema(df, ALL_SCHEMAS[tname], rep)
+    if any(i.check.startswith("naive_timestamp") or i.check.startswith("dtype:") or i.check == "missing_columns"
+           for i in rep.errors):
+        rep.add("*", "causality_checks_skipped", "error", 1, "fix schema errors first")
+        return rep
     d = tables.get("daily_bars")
     if d is not None and not d.empty:
         _daily_checks(d, tables.get("security_master"), rep)

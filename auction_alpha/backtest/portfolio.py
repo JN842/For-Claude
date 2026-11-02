@@ -65,7 +65,12 @@ def account(fills: pd.DataFrame, bars: pd.DataFrame, *, capital: float,
     if "multiplier" not in f:
         f["multiplier"] = 1.0
     f["multiplier"] = f["multiplier"].fillna(1.0)
-    fills_by_date = {d: g for d, g in f.sort_values(["date", "ts"], na_position="last").groupby("date")}
+    f = f.sort_values(["date", "ts"], na_position="last").reset_index(drop=True)
+    F = {c: f[c].to_numpy(dtype=object if f[c].dtype.kind not in "fiub" else None) for c in
+         ("trade_id", "instrument", "symbol", "leg", "side_qty", "price", "fees", "slip_cost", "multiplier",
+          "trade_side", "borrow_fee_bps")}
+    fdates = f["date"].to_numpy().astype("datetime64[ns]")
+    fut_arr = fut_close.to_numpy(float) if fut_close is not None else None
 
     pos: dict = {}       # key -> dict(symbol, qty, mult, book, fee_bps, inst)
     tr: dict = {}        # trade_id -> accumulators
@@ -75,6 +80,7 @@ def account(fills: pd.DataFrame, bars: pd.DataFrame, *, capital: float,
     cum_funding = 0.0
     trade_val_prev: dict = {}
     active: set = set()
+    prev_long_mv = 0.0
     for k, d in enumerate(dates):
         days = (d - prev_d).days if prev_d is not None else 0
         div_t = borrow_t = 0.0
@@ -101,32 +107,40 @@ def account(fills: pd.DataFrame, bars: pd.DataFrame, *, capital: float,
                     borrow_t += cst
         # fills
         fees_t = slip_t = turn_t = 0.0
-        g = fills_by_date.get(d)
-        if g is not None:
-            for r in g.itertuples(index=False):
-                key = (r.trade_id, r.instrument)
-                t = tr.setdefault(r.trade_id, dict(cash=0.0, fees=0.0, slip=0.0, borrow=0.0, dividends=0.0,
-                                                   entry_notional=0.0, side=int(r.trade_side), symbol=r.symbol if r.instrument == "stock" else None,
-                                                   first=d, last=d, hedge_pnl_cash=0.0))
-                mult = float(r.multiplier)
-                flow = -r.side_qty * r.price * mult - r.fees
-                if r.instrument == "future":
-                    t["hedge_pnl_cash"] += flow
-                else:
-                    t["cash"] += flow
-                    t["slip"] += r.slip_cost
-                    if r.leg == "entry":
-                        t["entry_notional"] += abs(r.side_qty * r.price * mult)
-                    turn_t += abs(r.side_qty * r.price * mult)
-                t["fees"] += r.fees
-                t["last"] = d
-                fees_t += r.fees
-                slip_t += r.slip_cost
-                p = pos.setdefault(key, dict(tid=r.trade_id, symbol=r.symbol, qty=0.0, mult=mult, inst=r.instrument,
-                                             fee_bps=float(r.borrow_fee_bps), mark=r.price))
-                p["qty"] += r.side_qty
-                if abs(p["qty"]) < 1e-9:
-                    p["qty"] = 0.0
+        lo = np.searchsorted(fdates, np.datetime64(d, "ns"), side="left")
+        hi = np.searchsorted(fdates, np.datetime64(d, "ns"), side="right")
+        touched = []
+        for q in range(lo, hi):
+            tid, inst, sym = F["trade_id"][q], F["instrument"][q], F["symbol"][q]
+            sq, px, fee, slip = float(F["side_qty"][q]), float(F["price"][q]), float(F["fees"][q]), float(F["slip_cost"][q])
+            mult = float(F["multiplier"][q])
+            key = (tid, inst)
+            t = tr.get(tid)
+            if t is None:
+                t = tr[tid] = dict(cash=0.0, fees=0.0, slip=0.0, borrow=0.0, dividends=0.0, entry_notional=0.0,
+                                   side=int(F["trade_side"][q]), symbol=sym if inst == "stock" else None,
+                                   first=d, last=d, hedge_pnl_cash=0.0)
+            flow = -sq * px * mult - fee
+            if inst == "future":
+                t["hedge_pnl_cash"] += flow
+            else:
+                t["cash"] += flow
+                t["slip"] += slip
+                if F["leg"][q] == "entry":
+                    t["entry_notional"] += abs(sq * px * mult)
+                turn_t += abs(sq * px * mult)
+            t["fees"] += fee
+            t["last"] = d
+            fees_t += fee
+            slip_t += slip
+            p = pos.get(key)
+            if p is None:
+                p = pos[key] = dict(tid=tid, symbol=sym, qty=0.0, mult=mult, inst=inst,
+                                    fee_bps=float(F["borrow_fee_bps"][q]), mark=px)
+            p["qty"] += sq
+            if abs(p["qty"]) < 1e-9:
+                p["qty"] = 0.0
+            touched.append(tid)
         # marks
         long_mv = short_mv = hedge_n = 0.0
         for key, p in pos.items():
@@ -134,8 +148,8 @@ def account(fills: pd.DataFrame, bars: pd.DataFrame, *, capital: float,
                 j = sym_col.get(p["symbol"])
                 if j is not None:
                     m = cvals[k, j]
-                elif fut_close is not None and str(p["symbol"]).endswith("_FUT"):
-                    m = float(fut_close.iloc[k])
+                elif fut_arr is not None and str(p["symbol"]).endswith("_FUT"):
+                    m = fut_arr[k]
                 else:
                     m = np.nan
                 if np.isfinite(m):
@@ -146,18 +160,19 @@ def account(fills: pd.DataFrame, bars: pd.DataFrame, *, capital: float,
                 else:
                     short_mv -= v
             else:
-                if fut_close is not None and np.isfinite(fut_close.iloc[k]):
-                    p["mark"] = float(fut_close.iloc[k])
+                if fut_arr is not None and np.isfinite(fut_arr[k]):
+                    p["mark"] = float(fut_arr[k])
                 hedge_n += abs(p["qty"] * p["mark"] * p["mult"])
-        funding_t = max(long_mv - capital, 0.0) * funding_spread_bps / 1e4 * days / 365.0
+        # funding on the long exposure carried over the interval (prev EOD -> today)
+        funding_t = max(prev_long_mv - capital, 0.0) * funding_spread_bps / 1e4 * days / 365.0
+        prev_long_mv = long_mv
         cum_funding += funding_t
         # per-trade P&L and attribution (only trades still open or touched today)
         pnl_l = pnl_s = pnl_h = 0.0
         tv: dict = {}
         for key, p in pos.items():
             tv[key] = p["qty"] * p["mark"] * p["mult"]
-        if g is not None:
-            active.update(g["trade_id"].unique())
+        active.update(touched)
         for tid in list(active):
             t = tr[tid]
             t["pnl"] = t["cash"] + tv.get((tid, "stock"), 0.0)

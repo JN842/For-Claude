@@ -1,0 +1,43 @@
+# Template for ingesting licensed vendor data:
+#   python -m auction_alpha ingest --mapping config/my_mapping.yaml
+# Map canonical column names (see docs/DATA_DICTIONARY.md) to vendor columns.
+# Do NOT commit vendor data or credentials to git.
+dataset: real_set_daily_2018_2026
+is_synthetic: false
+sources:
+  - "SETSMART export, licence #..., downloaded YYYY-MM-DD"
+tables:
+  security_master:
+    path: /secure/vendor/set/security_master.csv
+    format: csv
+    constants: {market: SET, is_synthetic: false}
+    columns: {symbol: SYMBOL, name: NAME, sector: SECTOR, listing_date: LIST_DATE,
+              delisting_date: DELIST_DATE, board_lot: BOARD_LOT, shares_outstanding: SHARES}
+  daily_bars:
+    path: /secure/vendor/set/daily_*.csv
+    format: csv
+    timezone: Asia/Bangkok            # used for naive timestamps in the files
+    constants: {market: SET}
+    # If the vendor gives no receipt time, assign a conservative one (never earlier than the event).
+    receipt_ts_rule: "eod+18:00"
+    columns:
+      symbol: SYMBOL
+      date: TRADE_DATE
+      open: OPEN
+      high: HIGH
+      low: LOW
+      close: CLOSE
+      volume: VOLUME
+      turnover: VALUE
+      open_auction_volume: ATO_VOLUME
+      last_continuous_price: LAST_CONT_PRICE
+      last_continuous_ts: LAST_CONT_TIME
+      preclose_bid: BID_1629
+      preclose_ask: ASK_1629
+      close_auction_price: ATC_PRICE
+      close_auction_volume: ATC_VOLUME
+      close_auction_ts: ATC_MATCH_TIME
+      close_auction_receipt_ts: ATC_RECEIPT_TIME   # only if captured in real time
+      close_method: CLOSE_METHOD
+      suspended: SUSPENDED
+      is_halfday: HALF_DAY

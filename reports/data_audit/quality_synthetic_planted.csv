@@ -1,0 +1,5 @@
+table,check,severity,count,detail,examples
+daily_bars,missing_last_continuous_price,warning,758,,[]
+daily_bars,suspended_rows,warning,241,,[]
+daily_bars,no_auction_match_rows,info,24679,,[]
+daily_bars,missing_rows_vs_calendar,warning,373,listed security-days with no record (skipped by strategies),[]

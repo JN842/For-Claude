@@ -61,6 +61,8 @@ def bootstrap_ci(x, stat, *, n_boot: int = 1000, mean_block: float = 10.0, alpha
     idx = stationary_bootstrap_indices(len(x), n_boot, mean_block, rng)
     vals = np.array([stat(x[i]) for i in idx])
     vals = vals[np.isfinite(vals)]
+    if len(vals) == 0:
+        return float(stat(x)), float("nan"), float("nan")
     return float(stat(x)), float(np.quantile(vals, alpha / 2)), float(np.quantile(vals, 1 - alpha / 2))
 
 

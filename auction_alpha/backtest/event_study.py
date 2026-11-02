@@ -35,7 +35,7 @@ HORIZONS = [  # (label, stock label col, market label col, executable?)
 def _clustered(df: pd.DataFrame, col: str, *, n_boot: int = 400, seed: int = 0) -> dict:
     s = df.groupby("date")[col].mean().dropna()
     mu, se, p = newey_west_tstat(s.to_numpy())
-    _, lo, hi = bootstrap_ci(s.to_numpy(), np.mean, n_boot=n_boot, mean_block=5, seed=seed) if len(s) >= 10 else (mu, np.nan, np.nan)
+    _, lo, hi = bootstrap_ci(s.to_numpy(), np.mean, n_boot=n_boot, mean_block=5, seed=seed) if (len(s) >= 10 and n_boot > 0) else (mu, np.nan, np.nan)
     return dict(mean_bps=mu * 1e4, se_bps=se * 1e4, t=mu / se if se else np.nan, p=p, ci_lo_bps=lo * 1e4,
                 ci_hi_bps=hi * 1e4, n_events=int(df[col].notna().sum()), n_dates=int(len(s)))
 
