@@ -322,7 +322,11 @@ Universe 100 ตัว, 10 กลุ่มต่อรอบ, 44 รอบ (form
   edge ต่อเทรด ~15–25 bps; break-even อยู่ราว 5–10 bps/ข้าง
 - **Stop-loss ที่ |CMI| ≥ 2 ทำร้ายผล**: ตรงนั้นคือจุดที่ mispricing กลับตัวแรงที่สุด
   (spread วันถัดไป ~−35 bps) ปิด stop แล้วดีขึ้นทุกกรณีที่มีต้นทุน
-- **ชนิด vine แทบไม่มีผล**: C-vine / D-vine / R-vine ได้ gross ใกล้กัน (1–3% ต่อปี)
+- **ชนิด vine และ marginal แทบไม่มีผล**: C-vine / D-vine / R-vine และ marginal
+  แบบ ECDF / Student-t ได้ gross เฉลี่ยใกล้กัน (2.6–3.0% ต่อปี ก่อนต้นทุน)
+- **Copula แบบ Gaussian ล้วน (`families=("indep", "gaussian")`) ไม่ได้แย่กว่า**
+  — gross เฉลี่ย 4.1% ต่อปี และดีที่สุดที่ entry 1.5 (Sharpe 0.18 ที่ 15 bps, delay 1)
+  แปลว่า tail dependence ของ vine ไม่ได้เพิ่ม edge ในข้อมูลรายวันชุดนี้
 - แถวที่ดีที่สุด (delay 0, entry 1.5, ไม่มี stop, 15 bps) Sharpe 0.15 — ไม่มีนัยสำคัญ
   (standard error ของ Sharpe 10 ปี ≈ 0.3) และเป็นแถวที่เลือกจาก 64 แถว
 
