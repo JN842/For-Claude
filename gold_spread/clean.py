@@ -35,7 +35,7 @@ def clean(path):
     go, gf = load(path, 'GO'), load(path, 'GF10')
     rolls = go_rolls(go, gf)
     go[['o', 'h', 'l', 'c']] = back_adjust(go[['o', 'h', 'l', 'c']], rolls)
-    m = go[['c', 'v']].join(gf[['c', 'v']], how='inner', lsuffix='_go', rsuffix='_gf')  # both traded that minute
+    m = go[['o', 'c', 'v']].join(gf[['o', 'c', 'v']], how='inner', lsuffix='_go', rsuffix='_gf')  # both traded that minute
     hm = m.index.strftime('%H:%M')
     m = m[(hm >= '09:45') & (hm <= '16:50')]                    # bar-open time, day session only
     m = m[m.index.normalize() < m.index.normalize().max()]      # drop today's unfinished session
