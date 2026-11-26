@@ -334,6 +334,69 @@ Universe 100 ตัว, 10 กลุ่มต่อรอบ, 44 รอบ (form
 filter/overlay ของ market making หรือ execution (ต้นทุนส่วนเพิ่มต่ำ), ข้อมูล intraday
 เพื่อจับการกลับตัวภายในวัน, หรือ marginal แบบ GARCH filter
 
+### แยกรายอุตสาหกรรม / sector
+
+`price_data.SET_SECTOR` แมปหุ้น SET100 เข้า sector ของ SET (ENERG, BANK, FIN, COMM,
+FOOD, PROP, TRANS, HELTH, ...) และ `SECTOR_INDUSTRY` รวมเป็น industry (RESOURC,
+FINCIAL, SERVICE, AGRO, PROPCON, INDUS, TECH) — แมปด้วยมือ ควรเทียบกับ SET
+
+```python
+from price_data import industry_groups, SET100_2026H2
+from vine_arb import VineArbParams, backtest, backtest_by_group
+
+groups = industry_groups(SET100_2026H2, level="sector")     # หรือ level="industry"
+
+# partner ต้องอยู่ sector เดียวกับ target, เทรดทุก sector รวมเป็นพอร์ตเดียว
+params = VineArbParams(groups=groups)
+result = backtest(prices, params, start="2015-01-01")
+
+# เลือกเทรดเฉพาะบาง sector
+params = VineArbParams(groups=groups, trade_groups=("ENERG", "FOOD"))
+
+# แต่ละ sector เป็นพอร์ตของตัวเอง (3 กลุ่ม/รอบ) -> ตารางเทียบ
+by_sector = backtest_by_group(prices, VineArbParams(groups=groups),
+                              n_quadruples=3, start="2015-01-01")
+by_sector["summary"]
+```
+
+```bash
+python vine_arb_run.py --by sector --per-group
+python vine_arb_run.py --by sector --groups ENERG FOOD
+```
+
+sector ที่มีหุ้นน้อยกว่า 4 ตัวสร้างกลุ่มไม่ได้ (CONMAT, INSUR, ICT, PETRO, ...)
+จึงถูกข้าม ใช้ `level="industry"` ถ้าอยากให้หุ้นเหล่านั้นได้เทรด
+
+**ผล** (default: entry 0.6, stop 2, delay 1; ต่อ sector 3 กลุ่ม/รอบ):
+
+| sector | หุ้น | gross/ปี | net/ปี @15 bps | Sharpe net |
+|---|---|---|---|---|
+| FOOD | 9 | +10.8% | +1.7% | 0.19 |
+| TRANS | 9 | +4.8% | −4.0% | −0.18 |
+| ENERG | 19 | +4.7% | −4.1% | −0.22 |
+| HELTH | 7 | +2.9% | −5.5% | −0.42 |
+| COMM | 9 | +1.4% | −7.8% | −0.45 |
+| TOURISM | 4 | +1.0% | −7.3% | −0.48 |
+| BANK | 8 | −0.5% | −8.1% | −0.91 |
+| PROP | 9 | −0.5% | −7.9% | −0.64 |
+| FIN | 6 | −3.8% | −12.4% | −0.80 |
+| ETRON | 4 | −12.4% | −20.6% | −0.97 |
+
+| พอร์ตรวม 10 กลุ่ม/รอบ | gross/ปี | net/ปี @15 bps |
+|---|---|---|
+| ไม่จำกัด sector (เดิม) | −0.2% | −8.1% |
+| partner ใน sector เดียวกัน | +2.9% | −5.1% |
+
+- **จำกัด sector ช่วยจริง**: gross ของพอร์ตรวมดีขึ้นราว 3% ต่อปี — กลุ่มที่ข้าม
+  sector (เช่น BJC/CPALL จับคู่กับ SAWAD/MTC) เป็น correlation ที่ไม่มีเหตุผลทาง
+  เศรษฐกิจรองรับ
+- **แต่ยังไม่พอจ่ายต้นทุน** ยกเว้น FOOD ที่ net บวกเล็กน้อย (6/11 ปีบวก)
+- ค่าที่ดีที่สุดในตาราง sensitivity คือ ENERG ที่ entry 1.5 (Sharpe 0.55 หลังต้นทุน)
+  แต่มาจากปี 2024 ปีเดียว (+41.5%), บวกแค่ 4/11 ปี และกำไรมาจาก BGRIM/EA/PTTEP
+  เป็นหลัก — ไม่ควรเชื่อจนกว่าจะทดสอบนอกช่วงนี้
+- sector ที่ "ควรจะ" เป็นคู่กันดีอย่าง BANK และ FIN กลับไม่มี edge — หุ้นกลุ่มนี้
+  เคลื่อนไหวไปด้วยกันอยู่แล้ว ส่วนต่างรายวันจึงเป็น noise มากกว่า mispricing
+
 ### ข้อจำกัด
 
 - **Survivorship bias**: universe คือรายชื่อ SET100 ปัจจุบัน (รายชื่อนอก SET50 ใน
