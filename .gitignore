@@ -2,3 +2,5 @@ __pycache__/
 .pytest_cache/
 dividend_model_output/
 *.ipynb_checkpoints
+price_cache/
+vine_arb_output/
