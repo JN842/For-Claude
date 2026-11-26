@@ -62,6 +62,8 @@ class VineArbParams:
     cost_bps: float = 15.0          # per side, per unit of notional traded
     borrow_bps: float = 150.0       # per year, on the short notional
     universe: tuple | None = field(default=None)
+    groups: dict | None = field(default=None)       # {symbol: sector/industry}
+    trade_groups: tuple | None = field(default=None)  # only these groups
 
     def __post_init__(self):
         if self.marginal not in ("ecdf", "t"):
@@ -76,6 +78,8 @@ class VineArbParams:
             raise ValueError("execution_delay must be >= 0")
         if self.exit >= self.entry:
             raise ValueError("exit must be below entry")
+        if self.trade_groups is not None and self.groups is None:
+            raise ValueError("trade_groups needs groups")
 
 
 # ---------------------------------------------------------------------------
@@ -114,14 +118,24 @@ def spearman(returns):
 
 
 def select_quadruples(returns, params):
-    """Best partner group for every target, ranked by summed Spearman rho."""
+    """Best partner group for every target, ranked by summed Spearman rho.
+
+    With ``params.groups`` the partners must share the target's group
+    (sector or industry) and stocks without a group are left out.
+    """
+    if params.groups is not None:
+        returns = returns[[c for c in returns.columns if c in params.groups]]
     rho = spearman(returns)
     names = rho.columns.to_numpy()
     matrix = rho.to_numpy()
+    labels = (np.array([params.groups[n] for n in names], dtype=object)
+              if params.groups is not None else None)
     k = params.n_partners
     rows = []
     for i, target in enumerate(names):
         others = np.delete(np.arange(len(names)), i)
+        if labels is not None:
+            others = others[labels[others] == labels[i]]
         candidates = others[np.argsort(-matrix[i, others])[: params.prefilter]]
         if len(candidates) < k:
             continue
@@ -133,12 +147,14 @@ def select_quadruples(returns, params):
         best = combos[np.argmax(score)]
         best = best[np.argsort(-matrix[i, best])]
         rows.append({
+            "group": labels[i] if labels is not None else None,
             "target": target,
             "partners": tuple(names[best]),
             "score": float(score.max()),
             "rho_target": float(matrix[i, best].mean()),
         })
-    table = pd.DataFrame(rows, columns=["target", "partners", "score", "rho_target"])
+    table = pd.DataFrame(
+        rows, columns=["group", "target", "partners", "score", "rho_target"])
     return (
         table.sort_values("score", ascending=False)
         .head(params.n_quadruples)
@@ -431,7 +447,8 @@ def extract_trades(daily, model, period, delay):
 FIT_FIELDS = (
     "formation_days", "trading_days", "n_partners", "prefilter",
     "n_quadruples", "min_coverage", "max_abs_return", "marginal", "vine",
-    "families", "selection_criterion", "hedge", "universe",
+    "families", "selection_criterion", "hedge", "universe", "groups",
+    "trade_groups",
 )
 
 
@@ -440,9 +457,13 @@ def _fit_key(params):
 
 
 def _universe(prices, params):
-    if params.universe is None:
-        return prices
-    return prices[[c for c in params.universe if c in prices.columns]]
+    columns = list(prices.columns)
+    if params.universe is not None:
+        columns = [c for c in params.universe if c in prices.columns]
+    if params.trade_groups is not None:
+        columns = [c for c in columns
+                   if params.groups.get(c) in params.trade_groups]
+    return prices[columns]
 
 
 def period_schedule(index, params):
@@ -470,6 +491,7 @@ def fit_period(returns, f0, t0, t1, params, period):
         fitted.append({
             "model": model, "returns": window, "h": model.conditional(window),
             "score": row.score, "rho_target": row.rho_target,
+            "group": row.group,
         })
     return {
         "period": period,
@@ -507,12 +529,14 @@ def trade_period(fit, params):
         pnl = quadruple_pnl(model, item["returns"], params,
                             complete=fit["complete"], h=item["h"])
         daily[model.target] = pnl
-        trades.extend(extract_trades(pnl, model, fit["period"],
-                                     params.execution_delay))
+        trades.extend(
+            dict(row, group=item["group"]) for row in extract_trades(
+                pnl, model, fit["period"], params.execution_delay))
         models.append({
             "period": fit["period"], "formation_start": fit["formation_start"],
             "trading_start": fit["trading_start"],
             "trading_end": fit["trading_end"],
+            "group": item["group"],
             "score": item["score"], "rho_target": item["rho_target"],
             **model.describe(),
         })
@@ -574,6 +598,45 @@ def backtest(prices, params=None, start=None, end=None, progress=False,
     }
 
 
+def backtest_by_group(prices, params, groups=None, n_quadruples=None,
+                      start=None, end=None, progress=False):
+    """Separate backtest for each group in ``params.groups``.
+
+    Each group is its own portfolio: only its stocks, ``n_quadruples``
+    quadruples per period (default: ``params.n_quadruples``, capped so a
+    group never trades more quadruples than it has stocks).  Groups with
+    fewer than ``n_partners + 1`` priced stocks are skipped.
+
+    Returns ``{"summary": one row per group, "results": {group: backtest}}``.
+    """
+    from dataclasses import replace
+
+    if params.groups is None:
+        raise ValueError("params.groups is required")
+    members = pd.Series(params.groups)
+    members = members[members.index.isin(prices.columns)]
+    names = groups or sorted(members.unique())
+    rows, results = [], {}
+    for name in names:
+        size = int((members == name).sum())
+        if size < params.n_partners + 1:
+            continue
+        quads = min(n_quadruples or params.n_quadruples, size)
+        trial = replace(params, trade_groups=(name,), n_quadruples=quads)
+        if progress:
+            print(f"{name}: {size} stocks, {quads} quadruples")
+        try:
+            result = backtest(prices, trial, start=start, end=end)
+        except ValueError as exc:      # e.g. no period with enough history
+            if progress:
+                print(f"  skipped: {exc}")
+            continue
+        results[name] = result
+        rows.append({"group": name, "stocks": size, "quadruples": quads,
+                     **result["summary"].to_dict()})
+    return {"summary": pd.DataFrame(rows), "results": results}
+
+
 SIDE = {1: "LONG_TARGET", -1: "SHORT_TARGET", 0: "FLAT"}
 
 
@@ -591,7 +654,7 @@ def _live_table(fit, result, params):
         last = pnl.iloc[-1]
         rows.append({
             "period": fit["period"], "as_of": pnl.index[-1],
-            "target": model.target, "partners": ", ".join(model.partners),
+            "group": item["group"], "target": model.target, "partners": ", ".join(model.partners),
             "weights": ", ".join(f"{w:.3f}" for w in model.weights),
             "h": last["h"], "cmi": last["cmi"],
             "signal": SIDE[int(last["signal"])],

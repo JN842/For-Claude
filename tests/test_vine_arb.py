@@ -226,5 +226,50 @@ def test_report_writes_every_sheet(tmp_path):
     prices = synthetic_prices(n_days=400)
     params = VineArbParams(formation_days=250, trading_days=60, n_quadruples=2,
                            prefilter=4, families=FAST)
-    result = run(prices, params, output_dir=tmp_path, with_sensitivity=True)
+    groups = {s: "X" if s in ("TGT", "P1", "P2", "P3") else "Y"
+              for s in prices.columns}
+    params = VineArbParams(**{**params.__dict__, "groups": groups})
+    result = run(prices, params, output_dir=tmp_path, with_sensitivity=True,
+                 per_group=True)
     assert load_workbook(result["path"]).sheetnames == list(SHEETS)
+
+
+# --- industry groups ---------------------------------------------------------
+
+def test_partners_come_from_the_target_group():
+    returns = to_returns(synthetic_prices())
+    # put TGT with the noise stocks: the factor cluster is no longer allowed
+    groups = {"TGT": "A", "N0": "A", "N1": "A", "N2": "A", "N3": "A",
+              "P1": "B", "P2": "B", "P3": "B"}
+    params = VineArbParams(n_quadruples=10, prefilter=5, groups=groups)
+    quads = select_quadruples(returns, params)
+    for row in quads.itertuples():
+        assert {groups[p] for p in row.partners} == {groups[row.target]}
+        assert row.group == groups[row.target]
+    # group B has only 3 stocks: no quadruple can be built there
+    assert set(quads["group"]) == {"A"}
+
+
+def test_trade_groups_limits_the_universe():
+    from vine_arb import backtest_by_group
+
+    prices = synthetic_prices(n_days=400)
+    groups = {"TGT": "X", "P1": "X", "P2": "X", "P3": "X",
+              "N0": "Y", "N1": "Y", "N2": "Y", "N3": "Y"}
+    params = VineArbParams(formation_days=250, trading_days=60, n_quadruples=4,
+                           prefilter=4, families=FAST, groups=groups)
+    by_group = backtest_by_group(prices, params)
+    assert list(by_group["summary"]["group"]) == ["X", "Y"]
+    x_models = by_group["results"]["X"]["models"]
+    assert set(x_models["target"]) <= {"TGT", "P1", "P2", "P3"}
+    assert x_models["group"].eq("X").all()
+    with pytest.raises(ValueError):
+        VineArbParams(trade_groups=("X",))
+
+
+def test_sector_map_covers_the_universe():
+    from price_data import SECTOR_INDUSTRY, SET100_2026H2, SET_SECTOR, industry_groups
+
+    assert set(SET_SECTOR) == set(SET100_2026H2)
+    assert set(SET_SECTOR.values()) <= set(SECTOR_INDUSTRY)
+    assert industry_groups(["PTT", "XYZ"], level="industry") == {"PTT": "RESOURC"}
