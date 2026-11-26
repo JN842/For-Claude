@@ -1,5 +1,9 @@
 # SET50 Dividend Carry Model
 
+> โปรเจกต์นี้มีสองส่วน: โมเดลปันผลสำหรับ SET50 futures (ด้านล่าง) และ
+> [Vine Copula Statistical Arbitrage](#vine-copula-statistical-arbitrage-set50set100)
+> บนหุ้น SET50/SET100
+
 คาดการณ์เงินปันผลรายหุ้น แล้วรวมเป็นปันผลต่อสัญญา SET50 futures (outright และ
 calendar spread) ตาม membership scenario ที่ user กำหนด เพื่อใช้คำนวณ dividend
 ใน cost of carry
@@ -217,6 +221,124 @@ run_snapshot(..., params=params)
   = จุดดัชนี
 - **Monitor**: Div pts, Fair (Rf) = S(1+r_f·t) − D, Fair (Borrow) = S(1+r_b·t) − D
   และตาราง calendar spread (ไกล − ใกล้) ทั้ง bid/ask/mid/fair
+
+## Vine Copula Statistical Arbitrage (SET50/SET100)
+
+| ไฟล์ | หน้าที่ |
+|---|---|
+| `price_data.py` | รายชื่อ SET50/SET100 และดึงราคาปรับปันผลจาก Yahoo (`.BK`) |
+| `vine_arb.py` | เลือกกลุ่มหุ้น, fit marginal + vine copula, mispricing index, backtest แบบ rolling |
+| `vine_arb_run.py` | CLI: backtest + สัญญาณวันนี้ → `vine_arb_output/vine_arb_<YYYYMMDD>.xlsx` |
+
+### หลักการ
+
+ทุกรอบ (default: formation 250 วันทำการ → trading 60 วัน แล้ว refit):
+
+1. **เลือกกลุ่ม 4 ตัว**: ต่อหุ้น target หนึ่งตัว เลือก partner 3 ตัวจาก 10 ตัวที่
+   Spearman rho กับ target สูงสุด โดยเอาชุดที่ผลรวม rho ทุกคู่ในกลุ่มสูงสุด แล้วเทรด
+   10 กลุ่มที่คะแนนสูงสุด (กลุ่มเดียวกันอาจมาหลายครั้งโดยสลับ target)
+2. **Marginal**: แปลงผลตอบแทนรายวันเป็น uniform ด้วย empirical CDF (mid-rank
+   เพราะ tick size ทำให้มีค่าซ้ำเยอะ) หรือ Student-t — fit จาก formation เท่านั้น
+3. **Vine copula** (`pyvinecopulib`): C-vine (default), D-vine หรือ R-vine อิสระ
+   เลือก family ทีละคู่ด้วย AIC (Gaussian, t, Clayton, Gumbel, Frank, Joe, BB1, BB7
+   + rotation) target อยู่ตัวแรกใน order จึงได้
+   `h = P(U_target ≤ u | U_partners)` ตรงจาก Rosenblatt transform
+4. **Mispricing**: `MI = h − 0.5`, `CMI` = ผลรวม MI (reset เป็น 0 ทุกครั้งที่ปิด position)
+5. **เทรด**: `CMI ≥ entry` → short target / long partners, `CMI ≤ −entry` → กลับกัน
+   ปิดเมื่อ CMI กลับผ่าน `exit` (0), `|CMI| ≥ stop` หรือจบรอบ ทั้งสองขา notional 1
+   (dollar neutral) แบ่ง partner เท่ากัน (`hedge="equal"`) หรือตาม OLS (`"ols"`)
+
+**จังหวะเวลา**: สัญญาณคำนวณจากราคาปิดวัน t
+- `execution_delay=1` (default) ส่งคำสั่งที่ราคาปิดวันถัดไป → ได้ผลตอบแทนตั้งแต่ t+2
+- `execution_delay=0` เทรดที่ราคาปิดวัน t (ATC) → ต้องคำนวณสัญญาณจากราคาก่อนปิดจริง
+  ซึ่ง backtest นี้ถือว่าเท่ากับราคาปิด (มองโลกในแง่ดี)
+
+**ต้นทุน**: `cost_bps` ต่อข้าง ต่อ notional ทั้งสองขา (เปิด+ปิด 1 รอบ = 4 × cost_bps)
+และ `borrow_bps` ต่อปีบนขา short
+
+### ใช้ใน Jupyter
+
+```python
+from price_data import SET100_2026H2, fetch_prices
+from vine_arb import VineArbParams, fit_periods, backtest, sensitivity, live_signals
+
+prices, log = fetch_prices(SET100_2026H2, start="2014-01-01",
+                           cache="price_cache/set100.csv")
+# หรือราคาจากระบบภายใน: DataFrame index = วันที่, คอลัมน์ = symbol, ราคาปรับปันผลแล้ว
+
+params = VineArbParams(entry=0.6, stop=2.0, execution_delay=1, cost_bps=15)
+fits = fit_periods(prices, params, start="2015-01-01", progress=True)  # ช้าสุด ~1 นาที
+result = backtest(prices, params, fits=fits)
+result["summary"]; result["trades"]; result["daily"]; result["models"]
+result["live"]       # สถานะวันล่าสุด: h, CMI, signal ที่ต้องถือหลังปิดวันนี้
+
+# เปลี่ยนเฉพาะกฎเทรด ไม่ต้อง fit ใหม่
+grid = sensitivity(prices, params, fits=fits,
+                   grid={"entry": [0.3, 0.6, 1.0], "execution_delay": [0, 1],
+                         "cost_bps": [0, 5, 10, 15]})
+```
+
+CLI:
+
+```bash
+python vine_arb_run.py --universe set100 --sensitivity
+python vine_arb_run.py --universe set50 --entry 1.0 --stop 0 --delay 0 --cost-bps 5
+```
+
+Excel: `Summary` (สถิติ + รายปี), `Live`, `Trades`, `Daily`, `Models` (กลุ่ม/family
+ที่เลือกแต่ละรอบ), `Sensitivity`, `Params`
+
+### ผล backtest (SET100, ม.ค. 2016 – พ.ย. 2026, ราคา Yahoo)
+
+Universe 100 ตัว, 10 กลุ่มต่อรอบ, 44 รอบ (formation 250 / trading 60 วัน)
+ทุกตัวเลขเป็น out-of-sample ต่อรอบ แต่ **การเลือกพารามิเตอร์จากตารางนี้เป็น in-sample**
+
+**Default** (C-vine, entry 0.6, stop 2.0, delay 1, cost 15 bps, borrow 1.5%/ปี):
+
+| | ค่า |
+|---|---|
+| CAGR (net) | −8.1% |
+| Gross (ก่อนต้นทุน) | −0.2% ต่อปี |
+| Vol / Sharpe | 8.4% / −0.96 |
+| Max drawdown | −61% |
+| Trades/ปี, win rate | 118, 48% |
+| Corr กับ SET100 equal-weight | 0.05 (market neutral จริง) |
+
+**Sharpe ตาม entry / delay / cost** (C-vine, ไม่มี stop):
+
+| delay | entry | 0 bps | 5 | 10 | 15 |
+|---|---|---|---|---|---|
+| 0 (ATC) | 0.3 | 0.59 | 0.30 | 0.01 | −0.28 |
+| 0 (ATC) | 1.5 | 0.42 | 0.33 | 0.24 | 0.15 |
+| 1 | 0.3 | 0.29 | 0.00 | −0.28 | −0.57 |
+| 1 | 1.5 | 0.24 | 0.15 | 0.06 | −0.03 |
+
+สิ่งที่พบ:
+
+- **มี edge จริงแต่สั้นและเล็ก**: `MI` วันนี้ทำนาย spread วันพรุ่งนี้ได้ (corr ≈ −0.05,
+  ติดลบทุกปี 2016–2026) ช่วง h ปลาย ๆ (<0.05 หรือ >0.95) spread กลับตัว ~15–25 bps
+  ในวันถัดไป แต่วันที่ 2 เหลือเกือบศูนย์ → ถ้าเทรดช้าไป 1 วัน (`delay=1`) edge หายไปเกือบหมด
+- **ต้นทุนกิน edge หมด**: 1 รอบ (เข้า+ออก ทั้งสองขา) ที่ 15 bps/ข้าง = 60 bps ขณะที่
+  edge ต่อเทรด ~15–25 bps; break-even อยู่ราว 5–10 bps/ข้าง
+- **Stop-loss ที่ |CMI| ≥ 2 ทำร้ายผล**: ตรงนั้นคือจุดที่ mispricing กลับตัวแรงที่สุด
+  (spread วันถัดไป ~−35 bps) ปิด stop แล้วดีขึ้นทุกกรณี
+- **ชนิด vine แทบไม่มีผล**: C-vine / D-vine / R-vine ได้ gross ใกล้กัน (1–3% ต่อปี)
+- แถวที่ดีที่สุด (delay 0, entry 1.5, ไม่มี stop, 15 bps) Sharpe 0.15 — ไม่มีนัยสำคัญ
+  (standard error ของ Sharpe 10 ปี ≈ 0.3) และเป็นแถวที่เลือกจาก 64 แถว
+
+สรุป: ในรูปแบบนี้ **ยังไม่ใช่กลยุทธ์ที่เทรดได้หลังหักต้นทุน** ทางที่น่าลองต่อ: ใช้เป็น
+filter/overlay ของ market making หรือ execution (ต้นทุนส่วนเพิ่มต่ำ), ข้อมูล intraday
+เพื่อจับการกลับตัวภายในวัน, หรือ marginal แบบ GARCH filter
+
+### ข้อจำกัด
+
+- **Survivorship bias**: universe คือรายชื่อ SET100 ปัจจุบัน (รายชื่อนอก SET50 ใน
+  `price_data.py` เป็นค่าประมาณ ควรเทียบกับประกาศ SET) ไม่ใช่สมาชิก ณ วันนั้น
+- ข้อมูล Yahoo มีช่วงหยุดซื้อขาย / corporate action แปลก ๆ (เช่น THAI กลับมาเทรด
+  ส.ค. 2025, TRUE ควบรวม 2023) — หุ้นที่ขยับเกิน 40% ใน formation จะถูกตัดออก
+- ไม่ได้จำลอง bid-ask, ข้อจำกัด short (ต้องเป็นหุ้นที่ short ได้ + มี SBL) หรือ
+  uptick rule; ขา short อาจใช้ single stock futures แทนได้ แต่มี basis/roll
+- ผลตอบแทนคิดแบบ rebalance ให้ notional คงที่ทุกวัน
 
 ## Tests
 
