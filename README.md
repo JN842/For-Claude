@@ -364,6 +364,16 @@ python vine_arb_run.py --by sector --per-group
 python vine_arb_run.py --by sector --groups ENERG FOOD
 ```
 
+เลือกหุ้นเองได้ด้วย `--symbols` (หรือ `VineArbParams(universe=(...))`) เช่นกลุ่มโรงกลั่น/ปิโตรเคมี:
+
+```bash
+python vine_arb_run.py --symbols PTT TOP SPRC IRPC PTTGC
+```
+
+ผล (5 หุ้น = 5 กลุ่มต่อรอบ, ค่าตั้งต้น): gross −4.3%/ปี, net −12.0%/ปี, Sharpe −1.19
+ไม่มีชุดพารามิเตอร์ไหนบวกหลังต้นทุน 15 bps (ดีที่สุด: ATC, entry 1.5, ไม่มี stop
+Sharpe −0.02) — correlation รายวันในกลุ่มนี้แค่ 0.33–0.57 และ PTT ผูกกับกลุ่มอ่อนสุด
+
 sector ที่มีหุ้นน้อยกว่า 4 ตัวสร้างกลุ่มไม่ได้ (CONMAT, INSUR, ICT, PETRO, ...)
 จึงถูกข้าม ใช้ `level="industry"` ถ้าอยากให้หุ้นเหล่านั้นได้เทรด
 

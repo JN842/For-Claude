@@ -273,3 +273,13 @@ def test_sector_map_covers_the_universe():
     assert set(SET_SECTOR) == set(SET100_2026H2)
     assert set(SET_SECTOR.values()) <= set(SECTOR_INDUSTRY)
     assert industry_groups(["PTT", "XYZ"], level="industry") == {"PTT": "RESOURC"}
+
+
+def test_small_universe_spreads_capital_over_fitted_quadruples():
+    prices = synthetic_prices(n_days=400)[["TGT", "P1", "P2", "P3"]]
+    params = VineArbParams(formation_days=250, trading_days=60, n_quadruples=10,
+                           families=FAST, entry=0.3, cost_bps=0, borrow_bps=0)
+    result = backtest(prices, params)
+    assert result["models"].groupby("period").size().eq(4).all()
+    assert result["trades"]["net_return"].sum() == pytest.approx(
+        result["daily"]["net"].sum() * 4)

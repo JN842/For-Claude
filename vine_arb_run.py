@@ -6,6 +6,7 @@
     python vine_arb_run.py --by sector                   # partners from the same sector
     python vine_arb_run.py --by sector --groups ENERG BANK  # only these sectors
     python vine_arb_run.py --by sector --per-group       # one portfolio per sector
+    python vine_arb_run.py --symbols PTT TOP SPRC IRPC PTTGC  # own list
 
 ``--prices`` takes a CSV of daily closes (date index, one column per
 symbol), for example from an internal price API.
@@ -82,6 +83,8 @@ def write_report(result, path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--universe", choices=["set50", "set100"], default="set100")
+    parser.add_argument("--symbols", nargs="+",
+                        help="trade only these symbols (overrides --universe)")
     parser.add_argument("--prices", help="CSV of daily closes instead of Yahoo")
     parser.add_argument("--start", default="2015-01-01")
     parser.add_argument("--entry", type=float, default=0.6)
@@ -106,11 +109,13 @@ def main():
     args = parser.parse_args()
 
     symbols = SET50_2026H2 if args.universe == "set50" else SET100_2026H2
+    if args.symbols:
+        symbols = [s.upper() for s in args.symbols]
     if args.prices:
         prices = pd.read_csv(args.prices, index_col=0, parse_dates=True)
     else:
-        prices, log = fetch_prices(symbols, start="2014-01-01",
-                                   cache=f"price_cache/{args.universe}.csv")
+        cache = None if args.symbols else f"price_cache/{args.universe}.csv"
+        prices, log = fetch_prices(symbols, start="2014-01-01", cache=cache)
         missing = log.loc[log["status"].ne("OK"), "symbol"].tolist()
         if missing:
             print("no prices for:", ", ".join(missing))

@@ -547,8 +547,8 @@ def backtest(prices, params=None, start=None, end=None, progress=False,
              fits=None):
     """Rolling out-of-sample backtest.
 
-    Returns a dict with ``daily`` (portfolio returns: each quadruple gets
-    1/``n_quadruples`` of capital, idle capital earns 0), ``positions``
+    Returns a dict with ``daily`` (portfolio returns: each fitted quadruple
+    gets an equal share of capital, idle capital earns 0), ``positions``
     (held position per quadruple-day), ``trades``, ``models`` (fitted
     quadruples per period), ``summary`` and ``live`` (state on the last day).
 
@@ -570,10 +570,11 @@ def backtest(prices, params=None, start=None, end=None, progress=False,
         net = pd.DataFrame({k: v["net"] for k, v in frame.items()})
         gross = pd.DataFrame({k: v["gross"] for k, v in frame.items()})
         held = pd.DataFrame({k: v["held"] for k, v in frame.items()})
+        slots = len(frame)       # < n_quadruples when the universe is small
         portfolio.append(pd.DataFrame({
             "period": fit["period"],
-            "net": net.sum(axis=1) / params.n_quadruples,
-            "gross": gross.sum(axis=1) / params.n_quadruples,
+            "net": net.sum(axis=1) / slots,
+            "gross": gross.sum(axis=1) / slots,
             "active": held.ne(0).sum(axis=1),
         }))
         positions.append(
