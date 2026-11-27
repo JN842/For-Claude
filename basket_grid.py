@@ -12,7 +12,8 @@ Same steps as the earlier GPSC-EGCO / AWC-ERW work, on daily closes
    * filter ``HL250<10``: half-life of the 250-day residual below 10 days.
    * filter ``HL<10 + beta agree``: also |beta120 - beta250| <= 0.5 for
      every leg.
-   Entry |z| >= 2, exit when z crosses 0, stop |z| >= 4, max 60 days.
+   Entry |z| >= 2 (only while every hedge ratio is positive), exit when
+   z crosses 0, stop |z| >= 4, max 60 days.
    Signal at close t, trade at close t+1; hedge and z scale frozen at
    entry; 1 gross notional per trade; cost 0.6% per round trip.
 3. Current status: z, HL250, beta by window, Johansen trace on 250 days.
@@ -51,6 +52,7 @@ START = pd.Timestamp("2022-01-01")
 ENTRY, STOP, MAX_HOLD = 2.0, 4.0, 60
 COST = 0.006                  # per round trip, on gross notional
 HL_MAX, BETA_GAP = 10, 0.5
+REQUIRE_POSITIVE_BETA = True  # no entry while any hedge ratio is <= 0
 OUT_DIR = base.OUT_DIR
 
 
@@ -145,6 +147,9 @@ def run(prices, regs, window, method, filt):
             ok = True
             if filt != "none":
                 ok = hl250[t] < HL_MAX
+            if ok and REQUIRE_POSITIVE_BETA:
+                # a negative hedge ratio means buying both legs: not a spread
+                ok = np.all(reg["beta"][t] > 0)
             if ok and filt == "HL<10 + beta agree":
                 ok = np.all(np.abs(b120[t] - b250[t]) <= BETA_GAP)
             if ok:
@@ -165,7 +170,7 @@ def _close(pos, t, dates, reason):
             "side": "long" if pos["direction"] > 0 else "short",
             "days": t - pos["i"], "gross": pos["pnl"],
             "net": pos["pnl"] - COST, "mae": pos["mae"], "reason": reason,
-            "beta": " ".join(f"{b:.2f}" for b in pos["beta"])}
+            "hedge_beta": " ".join(f"{b:.2f}" for b in pos["beta"])}
 
 
 def summarise(daily, trades):
