@@ -100,7 +100,9 @@ def z_value(logp_vals, t, alpha, beta, sd, method):
 # Backtest
 # ---------------------------------------------------------------------------
 
-def run(prices, regs, window, method, filt):
+def run(prices, regs, window, method, filt, gate=None):
+    """gate: optional boolean array (same index as prices); entries only
+    on days where it is True.  Open trades are not affected."""
     logp_vals = np.log(prices.values)
     p = prices.values
     dates = prices.index
@@ -158,6 +160,8 @@ def run(prices, regs, window, method, filt):
             ok = True
             if filt != "none":
                 ok = hl250[t] < HL_MAX
+            if ok and gate is not None:
+                ok = bool(gate[t])
             if ok and REQUIRE_POSITIVE_BETA:
                 # a negative hedge ratio means buying both legs: not a spread
                 ok = np.all(reg["beta"][t] > 0)
@@ -177,7 +181,8 @@ def run(prices, regs, window, method, filt):
 
 
 def _close(pos, t, dates, reason):
-    return {"entry": dates[pos["i"]].date(), "exit": dates[t].date(),
+    return {"signal": dates[pos["i"] - 1].date(),
+            "entry": dates[pos["i"]].date(), "exit": dates[t].date(),
             "side": "long" if pos["direction"] > 0 else "short",
             "days": t - pos["i"], "gross": pos["pnl"],
             "net": pos["pnl"] - pos["costs"], "costs": pos["costs"], "mae": pos["mae"], "reason": reason,
