@@ -2,3 +2,4 @@ __pycache__/
 .pytest_cache/
 dividend_model_output/
 *.ipynb_checkpoints
+cointegration_output/
