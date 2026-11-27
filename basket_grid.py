@@ -15,7 +15,8 @@ Same steps as the earlier GPSC-EGCO / AWC-ERW work, on daily closes
    Entry |z| >= 2 (only while every hedge ratio is positive), exit when
    z crosses 0, stop |z| >= 4, max 60 days.
    Signal at close t, trade at close t+1; hedge and z scale frozen at
-   entry; 1 gross notional per trade; cost 0.6% per round trip.
+   entry; 1 gross notional per trade; costs 0.02% per buy/sell on each
+   leg's notional plus 3% a year borrow on the short leg.
 3. Current status: z, HL250, beta by window, Johansen trace on 250 days.
 
 Writes cointegration_output/grid_<date>.xlsx and grid_diag_<name>.png.
@@ -50,7 +51,9 @@ Z_METHODS = ["model", "60d", "20d"]
 FILTERS = ["none", "HL250<10", "HL<10 + beta agree"]
 START = pd.Timestamp("2022-01-01")
 ENTRY, STOP, MAX_HOLD = 2.0, 4.0, 60
-COST = 0.006                  # per round trip, on gross notional
+COST_SIDE = 0.0002            # per buy or sell, on traded notional, every leg
+BORROW = 0.03                 # per year, on the short leg's market value
+DAYS_PER_YEAR = 245
 HL_MAX, BETA_GAP = 10, 0.5
 REQUIRE_POSITIVE_BETA = True  # no entry while any hedge ratio is <= 0
 OUT_DIR = base.OUT_DIR
@@ -111,19 +114,25 @@ def run(prices, regs, window, method, filt):
     for t in range(first, len(dates)):
         if pos is not None and t > pos["i"]:
             d = (pos["shares"] * (p[t] - p[t - 1])).sum()
-            pnl[t] += d
+            short = -(pos["shares"] * p[t])[pos["shares"] < 0].sum()
+            fee = BORROW / DAYS_PER_YEAR * short
+            pnl[t] += d - fee
             pos["pnl"] += d
-            pos["mae"] = min(pos["mae"], pos["pnl"])
+            pos["costs"] += fee
+            pos["mae"] = min(pos["mae"], pos["pnl"] - pos["costs"])
         if pending is not None:
             if pending[0] == "enter":
                 _, direction, frozen = pending
                 w = np.r_[1.0, -frozen["beta"]]
                 notional = direction * w / np.abs(w).sum()
+                fee = COST_SIDE * np.abs(notional).sum()
                 pos = dict(direction=direction, i=t, pnl=0.0, mae=0.0,
-                           shares=notional / p[t], **frozen)
-                pnl[t] -= COST / 2
+                           costs=fee, shares=notional / p[t], **frozen)
+                pnl[t] -= fee
             else:
-                pnl[t] -= COST / 2
+                fee = COST_SIDE * np.abs(pos["shares"] * p[t]).sum()
+                pnl[t] -= fee
+                pos["costs"] += fee
                 trades.append(_close(pos, t, dates, pending[1]))
                 pos = None
             pending = None
@@ -134,7 +143,9 @@ def run(prices, regs, window, method, filt):
                         method)
             held = t - pos["i"]
             if last:
-                pnl[t] -= COST / 2
+                fee = COST_SIDE * np.abs(pos["shares"] * p[t]).sum()
+                pnl[t] -= fee
+                pos["costs"] += fee
                 trades.append(_close(pos, t, dates, "end of data"))
                 pos = None
             elif pos["direction"] * z >= 0:
@@ -169,7 +180,7 @@ def _close(pos, t, dates, reason):
     return {"entry": dates[pos["i"]].date(), "exit": dates[t].date(),
             "side": "long" if pos["direction"] > 0 else "short",
             "days": t - pos["i"], "gross": pos["pnl"],
-            "net": pos["pnl"] - COST, "mae": pos["mae"], "reason": reason,
+            "net": pos["pnl"] - pos["costs"], "costs": pos["costs"], "mae": pos["mae"], "reason": reason,
             "hedge_beta": " ".join(f"{b:.2f}" for b in pos["beta"])}
 
 
@@ -338,7 +349,8 @@ def main():
         pd.DataFrame([
             ("period", f"{START.date()} to {base.AS_OF.date()} (daily)"),
             ("entry / exit / stop", f"|z|>={ENTRY} / z crosses 0 / |z|>={STOP}"),
-            ("max hold", MAX_HOLD), ("cost per round trip", COST),
+            ("max hold", MAX_HOLD), ("cost per side per leg", COST_SIDE),
+            ("borrow fee p.a. on short leg", BORROW),
             ("execution", "signal close t, trade close t+1"),
             ("HL filter", f"HL250 < {HL_MAX}"),
             ("beta agree", f"|beta120 - beta250| <= {BETA_GAP} every leg"),
