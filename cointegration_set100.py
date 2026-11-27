@@ -11,9 +11,10 @@ adjusted close prices:
 * Recent window (latest 2 years): Engle-Granger again, to show whether the
   pair is cointegrated right now.
 
-With 4,950 tests about 250 pairs pass at 5% by chance alone, so p-values are
-also adjusted with Benjamini-Hochberg (FDR) and the final ``robust`` flag
-needs the out-of-sample check as well.
+No multiple-testing adjustment is applied; with ~4,500 tests about 5% pass
+by chance, which is why ``robust`` also needs the out-of-sample check.
+EA and JAS are left out: each had a one-off price collapse/jump inside the
+windows that makes almost any spread against it look mean-reverting.
 
 Prices come from Yahoo Finance (``<SYMBOL>.BK``, adjusted for dividends and
 splits so XD drops do not look like breaks).
@@ -30,7 +31,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from statsmodels.stats.multitest import multipletests
 from statsmodels.tsa.stattools import adfuller, coint
 from statsmodels.tsa.vector_ar.vecm import coint_johansen
 
@@ -46,6 +46,10 @@ PLANB PR9 PRM PTG PTT PTTEP PTTGC QH RATCH RCL SAWAD SCB SCC SCGP SIRI SISB
 SJWD SPALI SPRC STA STECON STGT TASCO TCAP TFG TIDLOR TISCO TLI TOA TOP TRUE
 TTB TU VGI WHA
 """.split()
+
+# One-off price breaks (EA collapse 2024, JAS +55% Dec 2023) create spurious
+# cointegration with almost every other stock.
+EXCLUDE = {"EA", "JAS"}
 
 SET50 = set("""
 ADVANC AOT AWC BANPU BBL BDMS BEM BH BJC BTS CBG CCET CENTEL COM7 CPALL CPF
@@ -209,7 +213,7 @@ def run(close, workers=None):
     to_dict = lambda f: {c: f[c].to_numpy() for c in f.columns}
     form_d, valid_d, recent_d = (to_dict(frames[n]) for n in
                                  ("formation", "validation", "recent"))
-    stocks = list(form.columns)
+    stocks = [s for s in form.columns if s not in EXCLUDE]
     jobs = [(a, b, form_d, valid_d, recent_d)
             for a, b in itertools.combinations(stocks, 2)]
 
@@ -217,14 +221,11 @@ def run(close, workers=None):
         rows = list(pool.map(test_pair, jobs, chunksize=50))
     result = pd.DataFrame(rows)
 
-    # Multiple-testing control across all pairs.
-    result["eg_q_max"] = multipletests(result["eg_p_max"], method="fdr_bh")[1]
     lo, hi = HALF_LIFE_RANGE
     hl_ok = result["half_life_days"].between(lo, hi)
     result["pass_insample"] = (
         (result["eg_p_max"] < ALPHA) & result["johansen_pass"] & hl_ok
     )
-    result["pass_fdr"] = result["pass_insample"] & (result["eg_q_max"] < ALPHA)
     result["pass_oos"] = result["oos_adf_p"] < ALPHA
     result["robust"] = result["pass_insample"] & result["pass_oos"]
     result["recent_pass"] = result["recent_eg_p_min"] < ALPHA
@@ -233,19 +234,10 @@ def run(close, workers=None):
     result["sector_a"] = result["stock_a"].map(SECTOR_OF)
     result["sector_b"] = result["stock_b"].map(SECTOR_OF)
     result["same_sector"] = result["sector_a"] == result["sector_b"]
-    # FDR within the smaller same-sector family (fewer tests, less penalty).
-    same = result["same_sector"]
-    result["eg_q_within_sector"] = np.nan
-    result.loc[same, "eg_q_within_sector"] = multipletests(
-        result.loc[same, "eg_p_max"], method="fdr_bh")[1]
-    # Recent window: min over two orderings, so double p before BH.
-    recent = result["recent_eg_p_min"].notna()
-    result["recent_q"] = np.nan
-    result.loc[recent, "recent_q"] = multipletests(
-        (2 * result.loc[recent, "recent_eg_p_min"]).clip(upper=1),
-        method="fdr_bh")[1]
-    result = result.sort_values(["robust", "pass_insample", "eg_p_max"],
-                                ascending=[False, False, True])
+    result["pass_all"] = result["robust"] & result["recent_pass"]
+    result = result.sort_values(["pass_all", "robust", "pass_insample",
+                                 "eg_p_max"],
+                                ascending=[False, False, False, True])
 
     stock_info = pd.DataFrame({
         "symbol": SET100,
@@ -254,6 +246,7 @@ def run(close, workers=None):
            for n in WINDOWS},
         "sector": [SECTOR_OF[s] for s in SET100],
         "first_price": [close[s].first_valid_index() for s in SET100],
+        "excluded": [s in EXCLUDE for s in SET100],
         "in_formation_test": [s in stocks for s in SET100],
     })
     return result, stock_info, frames
@@ -263,7 +256,8 @@ def summary_table(result, stock_info):
     n = len(result)
     rows = [
         ("Universe (SET100 H1 2026)", len(stock_info)),
-        ("Stocks with ≥95% history in formation window",
+        ("Excluded by hand", ", ".join(sorted(EXCLUDE))),
+        ("Stocks tested (≥95% history in formation window, not excluded)",
          int(stock_info["in_formation_test"].sum())),
         ("Pairs tested", n),
         ("Expected false positives at 5%", round(n * ALPHA)),
@@ -272,16 +266,14 @@ def summary_table(result, stock_info):
         ("Johansen trace rejects r=0 at 5%", int(result.johansen_pass.sum())),
         (f"In-sample pass (EG both + Johansen + half-life {HALF_LIFE_RANGE})",
          int(result.pass_insample.sum())),
-        ("In-sample pass and BH-FDR q<0.05", int(result.pass_fdr.sum())),
         ("Robust: in-sample pass and out-of-sample ADF p<0.05",
          int(result.robust.sum())),
         ("Recent 2y EG p<0.05 (any ordering)", int(result.recent_pass.sum())),
-        ("Recent 2y BH-FDR q<0.05", int((result.recent_q < ALPHA).sum())),
+        ("Pass all: in-sample + out-of-sample + recent 2y",
+         int(result.pass_all.sum())),
         ("Same-sector pairs", int(result.same_sector.sum())),
         ("Same-sector in-sample pass",
          int((result.same_sector & result.pass_insample).sum())),
-        ("Same-sector BH-FDR q<0.05 (within sector family)",
-         int((result.eg_q_within_sector < ALPHA).sum())),
         ("Same-sector robust",
          int((result.same_sector & result.robust).sum())),
     ]
@@ -291,12 +283,12 @@ def summary_table(result, stock_info):
 def write_excel(result, stock_info, path):
     columns = ["stock_a", "stock_b", "sector_a", "sector_b", "same_sector",
                "dependent", "both_set50",
-               "eg_p_a_on_b", "eg_p_b_on_a", "eg_q_max", "eg_q_within_sector",
+               "eg_p_a_on_b", "eg_p_b_on_a",
                "johansen_trace", "johansen_crit95", "beta", "half_life_days",
                "return_corr", "oos_adf_p", "oos_zscore_last",
-               "recent_eg_p_min", "recent_q",
-               "pass_insample", "pass_fdr", "pass_oos", "robust",
-               "recent_pass"]
+               "recent_eg_p_min",
+               "pass_insample", "pass_oos", "robust", "recent_pass",
+               "pass_all"]
     run_info = pd.DataFrame([
         ("as_of", AS_OF.date()),
         *[(f"{n}_window", f"{s.date()} to {e.date()}")
@@ -304,10 +296,12 @@ def write_excel(result, stock_info, path):
         ("price", "Yahoo Finance adjusted close, log"),
         ("alpha", ALPHA), ("min_coverage", MIN_COVERAGE),
         ("half_life_range_days", str(HALF_LIFE_RANGE)),
+        ("excluded", ", ".join(sorted(EXCLUDE))),
         ("constituents", "SET100 Jan 1 - Jun 30 2026 (SET, Dec 15 2025)"),
     ], columns=["item", "value"])
     with pd.ExcelWriter(path) as xl:
         summary_table(result, stock_info).to_excel(xl, sheet_name="Summary", index=False)
+        result.loc[result.pass_all, columns].to_excel(xl, sheet_name="Pass_All", index=False)
         result.loc[result.robust, columns].to_excel(xl, sheet_name="Robust", index=False)
         result.loc[result.pass_insample, columns].to_excel(xl, sheet_name="InSample_Pass", index=False)
         result[result.same_sector].sort_values("eg_p_max")[columns].to_excel(
